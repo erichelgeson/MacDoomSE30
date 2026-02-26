@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.9)
 project(DoomSE30 C CXX)
 
 # Target 68030 (SE/30 CPU), optimize for size+speed
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m68030 -O2 -Wall -Wno-unused-variable -Wno-unused-parameter -Wno-missing-braces -DNORMALUNIX -D__BIG_ENDIAN__ -Wno-sequence-point")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m68030 -O3 -fomit-frame-pointer -Wall -Wno-unused-variable -Wno-unused-parameter -Wno-missing-braces -DNORMALUNIX -D__BIG_ENDIAN__ -Wno-sequence-point")
 
 # All Doom engine source files
 set(DOOM_SOURCES

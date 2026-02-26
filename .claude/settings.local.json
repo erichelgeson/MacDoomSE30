@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(log show:*)",
+      "Bash(head:*)",
+      "Bash(\"/Applications/Basilisk2/BasiliskII.app/Contents/MacOS/BasiliskII\":*)",
+      "Bash(# Kill the Basilisk II process we started pkill -f \"\"BasiliskII\"\" ; sleep 1 # Check for lock files or other state ls \"\"/Applications/Basilisk2/BlueSCSI_HDs/Backup hdas/\"\")",
+      "Bash(lsof:*)",
+      "Bash(kill 1528:*)",
+      "Bash(kill:*)",
+      "Bash(tail:*)",
+      "Bash(cmake:*)",
+      "Bash(grep:*)",
+      "Bash(hdiutil imageinfo:*)",
+      "Bash(chmod +x:*)",
+      "Bash(git init:*)",
+      "Bash(wc:*)"
+    ]
+  }
+}

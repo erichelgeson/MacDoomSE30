@@ -8,6 +8,7 @@
 #include <Memory.h>
 #include <Events.h>
 #include <OSUtils.h>
+#include <Processes.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -189,7 +190,7 @@ void I_Quit(void)
     M_SaveDefaults();
     doom_log("I_Quit: M_SaveDefaults done — exiting\n");
     if (g_logfile) { fclose(g_logfile); g_logfile = NULL; }
-    exit(0);
+    ExitToShell();   /* bypasses C++ destructor chain which can crash on exit */
 }
 
 byte *I_AllocLow(int length)
@@ -232,7 +233,7 @@ void I_Error(char *error, ...)
 
     D_QuitNetGame();
     I_ShutdownGraphics();
-    exit(-1);
+    ExitToShell();
 }
 
 void I_StartFrame(void)

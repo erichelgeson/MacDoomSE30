@@ -50,6 +50,14 @@ rcsid[] = "$Id: r_draw.c,v 1.4 1997/02/03 16:47:55 b1 Exp $";
 // status bar height at bottom of screen
 #define SBARHEIGHT		32
 
+/* ---- Direct 1-bit framebuffer access (set by i_video_mac.c) ---- */
+extern byte           *fb_mono_base;
+extern int             fb_mono_rowbytes;
+extern int             fb_mono_xoff;
+extern int             fb_mono_yoff;
+extern byte            grayscale_pal[];   /* palette index → 0-255 gray */
+extern const byte      bayer4x4[4][4];   /* 4x4 Bayer dither matrix */
+
 //
 // All drawing to the view buffer is accomplished in this file.
 // The other refresh files only know about ccordinates,
@@ -870,8 +878,334 @@ void R_DrawViewBorder (void)
 	ofs += SCREENWIDTH; 
     } 
 
-    // ? 
-    V_MarkRect (0,0,SCREENWIDTH, SCREENHEIGHT-SBARHEIGHT); 
-} 
- 
- 
+    // ?
+    V_MarkRect (0,0,SCREENWIDTH, SCREENHEIGHT-SBARHEIGHT);
+}
+
+
+/*
+ * ==========================================================================
+ * PHASE 4: DIRECT 1-BIT RENDERING
+ *
+ * These functions write directly to the Mac 1-bit framebuffer, bypassing
+ * the 320x200 8-bit intermediate buffer (screens[0]).  They are used during
+ * gameplay (GS_LEVEL) when the view area is rendered direct-to-screen.
+ *
+ * Key pre-computed values (constant per column/span):
+ *   fb_x      = dc_x + fb_mono_xoff          (absolute framebuffer x)
+ *   byte_off  = fb_x >> 3                     (byte index in fb row)
+ *   bit_set   = 0x80 >> (fb_x & 7)           (mask to SET   bit = black pixel)
+ *   bit_clr   = ~bit_set                      (mask to CLEAR bit = white pixel)
+ *   thresh[4] = bayer4x4[0..3][fb_x & 3]     (Bayer column for this x)
+ *
+ * On Mac 1-bit: bit 7 (MSB) of byte N is screen pixel x = N*8+0,
+ *               bit 0 (LSB) is screen pixel x = N*8+7.
+ * So "black pixel" (bit set) means the monitor renders it dark.
+ * ==========================================================================
+ */
+
+
+/*
+ * R_DrawColumn_Mono
+ * High-detail wall column renderer → direct 1-bit framebuffer.
+ */
+void R_DrawColumn_Mono(void)
+{
+    int             count;
+    unsigned char  *dst;
+    unsigned char   bit_set, bit_clr;
+    fixed_t         frac, fracstep;
+    byte            thresh[4];
+    int             bayer_y;
+    int             fb_x;
+
+    count = dc_yh - dc_yl;
+    if (count < 0)
+        return;
+
+    fb_x    = dc_x + viewwindowx + fb_mono_xoff;
+    bit_set = (unsigned char)(0x80 >> (fb_x & 7));
+    bit_clr = (unsigned char)(~bit_set);
+
+    /* Pre-load Bayer thresholds for this column (constant x, varies by y mod 4) */
+    thresh[0] = bayer4x4[0][fb_x & 3];
+    thresh[1] = bayer4x4[1][fb_x & 3];
+    thresh[2] = bayer4x4[2][fb_x & 3];
+    thresh[3] = bayer4x4[3][fb_x & 3];
+
+    dst = (unsigned char *)fb_mono_base
+          + (dc_yl + viewwindowy + fb_mono_yoff) * fb_mono_rowbytes
+          + (fb_x >> 3);
+
+    fracstep = dc_iscale;
+    frac     = dc_texturemid + (dc_yl - centery) * fracstep;
+    bayer_y  = (dc_yl + viewwindowy) & 3;
+
+    do {
+        byte gray = grayscale_pal[dc_colormap[dc_source[(frac >> FRACBITS) & 127]]];
+        if (gray < thresh[bayer_y])
+            *dst |= bit_set;
+        else
+            *dst &= bit_clr;
+        dst     += fb_mono_rowbytes;
+        frac    += fracstep;
+        bayer_y  = (bayer_y + 1) & 3;
+    } while (count--);
+}
+
+
+/*
+ * R_DrawColumnLow_Mono
+ * Low-detail wall column renderer → direct 1-bit framebuffer.
+ * Each logical column is 2 screen pixels wide.
+ */
+void R_DrawColumnLow_Mono(void)
+{
+    int             count;
+    unsigned char  *dst0, *dst1;
+    unsigned char   bit_set0, bit_clr0, bit_set1, bit_clr1;
+    fixed_t         frac, fracstep;
+    byte            thresh0[4], thresh1[4];
+    int             bayer_y;
+    int             fb_x0, fb_x1;
+
+    count = dc_yh - dc_yl;
+    if (count < 0)
+        return;
+
+    /* In low-detail mode each logical column is 2 screen pixels wide.
+     * Use a local variable to avoid clobbering dc_x — the sprite loop in
+     * R_DrawVisSprite uses dc_x as its iterator: for (dc_x=x1; dc_x<=x2; dc_x++)
+     * so modifying it here would cause all but the first column to be skipped. */
+    int lx  = (dc_x << 1) + viewwindowx;
+
+    fb_x0   = lx + fb_mono_xoff;
+    fb_x1   = fb_x0 + 1;
+
+    bit_set0 = (unsigned char)(0x80 >> (fb_x0 & 7));
+    bit_clr0 = (unsigned char)(~bit_set0);
+    bit_set1 = (unsigned char)(0x80 >> (fb_x1 & 7));
+    bit_clr1 = (unsigned char)(~bit_set1);
+
+    thresh0[0] = bayer4x4[0][fb_x0 & 3];
+    thresh0[1] = bayer4x4[1][fb_x0 & 3];
+    thresh0[2] = bayer4x4[2][fb_x0 & 3];
+    thresh0[3] = bayer4x4[3][fb_x0 & 3];
+
+    thresh1[0] = bayer4x4[0][fb_x1 & 3];
+    thresh1[1] = bayer4x4[1][fb_x1 & 3];
+    thresh1[2] = bayer4x4[2][fb_x1 & 3];
+    thresh1[3] = bayer4x4[3][fb_x1 & 3];
+
+    dst0 = (unsigned char *)fb_mono_base
+           + (dc_yl + viewwindowy + fb_mono_yoff) * fb_mono_rowbytes
+           + (fb_x0 >> 3);
+    /* fb_x0 and fb_x1 differ by 1; they may share the same byte or not */
+    dst1 = (unsigned char *)fb_mono_base
+           + (dc_yl + viewwindowy + fb_mono_yoff) * fb_mono_rowbytes
+           + (fb_x1 >> 3);
+
+    fracstep = dc_iscale;
+    frac     = dc_texturemid + (dc_yl - centery) * fracstep;
+    bayer_y  = (dc_yl + viewwindowy) & 3;
+
+    do {
+        byte gray = grayscale_pal[dc_colormap[dc_source[(frac >> FRACBITS) & 127]]];
+
+        if (gray < thresh0[bayer_y]) *dst0 |= bit_set0; else *dst0 &= bit_clr0;
+        if (gray < thresh1[bayer_y]) *dst1 |= bit_set1; else *dst1 &= bit_clr1;
+
+        dst0    += fb_mono_rowbytes;
+        dst1    += fb_mono_rowbytes;
+        frac    += fracstep;
+        bayer_y  = (bayer_y + 1) & 3;
+    } while (count--);
+}
+
+
+/*
+ * R_DrawFuzzColumn_Mono
+ * Spectre/invisibility effect → direct 1-bit framebuffer.
+ * Simplified: uses a darkened colormap rather than reading neighbour pixels.
+ */
+void R_DrawFuzzColumn_Mono(void)
+{
+    int             count;
+    unsigned char  *dst;
+    unsigned char   bit_set, bit_clr;
+    fixed_t         frac, fracstep;
+    byte            thresh[4];
+    int             bayer_y;
+    int             fb_x;
+
+    if (!dc_yl) dc_yl = 1;
+    if (dc_yh == viewheight - 1) dc_yh = viewheight - 2;
+
+    count = dc_yh - dc_yl;
+    if (count < 0)
+        return;
+
+    fb_x    = dc_x + viewwindowx + fb_mono_xoff;
+    bit_set = (unsigned char)(0x80 >> (fb_x & 7));
+    bit_clr = (unsigned char)(~bit_set);
+
+    thresh[0] = bayer4x4[0][fb_x & 3];
+    thresh[1] = bayer4x4[1][fb_x & 3];
+    thresh[2] = bayer4x4[2][fb_x & 3];
+    thresh[3] = bayer4x4[3][fb_x & 3];
+
+    dst = (unsigned char *)fb_mono_base
+          + (dc_yl + viewwindowy + fb_mono_yoff) * fb_mono_rowbytes
+          + (fb_x >> 3);
+
+    fracstep = dc_iscale;
+    frac     = dc_texturemid + (dc_yl - centery) * fracstep;
+    bayer_y  = (dc_yl + viewwindowy) & 3;
+
+    /* Fuzz uses colormap 6 (slightly darkened) — use that for mono too */
+    do {
+        byte gray = grayscale_pal[colormaps[6 * 256 + dc_source[(frac >> FRACBITS) & 127]]];
+        if (gray < thresh[bayer_y])
+            *dst |= bit_set;
+        else
+            *dst &= bit_clr;
+        dst     += fb_mono_rowbytes;
+        frac    += fracstep;
+        bayer_y  = (bayer_y + 1) & 3;
+    } while (count--);
+}
+
+
+/*
+ * R_DrawTranslatedColumn_Mono
+ * Player sprite color remapping → direct 1-bit framebuffer.
+ */
+void R_DrawTranslatedColumn_Mono(void)
+{
+    int             count;
+    unsigned char  *dst;
+    unsigned char   bit_set, bit_clr;
+    fixed_t         frac, fracstep;
+    byte            thresh[4];
+    int             bayer_y;
+    int             fb_x;
+
+    count = dc_yh - dc_yl;
+    if (count < 0)
+        return;
+
+    fb_x    = dc_x + viewwindowx + fb_mono_xoff;
+    bit_set = (unsigned char)(0x80 >> (fb_x & 7));
+    bit_clr = (unsigned char)(~bit_set);
+
+    thresh[0] = bayer4x4[0][fb_x & 3];
+    thresh[1] = bayer4x4[1][fb_x & 3];
+    thresh[2] = bayer4x4[2][fb_x & 3];
+    thresh[3] = bayer4x4[3][fb_x & 3];
+
+    dst = (unsigned char *)fb_mono_base
+          + (dc_yl + viewwindowy + fb_mono_yoff) * fb_mono_rowbytes
+          + (fb_x >> 3);
+
+    fracstep = dc_iscale;
+    frac     = dc_texturemid + (dc_yl - centery) * fracstep;
+    bayer_y  = (dc_yl + viewwindowy) & 3;
+
+    do {
+        byte gray = grayscale_pal[dc_colormap[dc_translation[dc_source[frac >> FRACBITS]]]];
+        if (gray < thresh[bayer_y])
+            *dst |= bit_set;
+        else
+            *dst &= bit_clr;
+        dst     += fb_mono_rowbytes;
+        frac    += fracstep;
+        bayer_y  = (bayer_y + 1) & 3;
+    } while (count--);
+}
+
+
+/*
+ * R_DrawSpan_Mono
+ * Floor/ceiling span renderer → direct 1-bit framebuffer.
+ * fb_mono_xoff is a multiple of 8, so the Doom screen left edge is
+ * byte-aligned in the framebuffer.
+ */
+void R_DrawSpan_Mono(void)
+{
+    fixed_t         xfrac, yfrac;
+    int             count;
+    int             fb_y;
+    unsigned char  *dst_row;
+    int             x;
+
+    fb_y    = ds_y + viewwindowy + fb_mono_yoff;
+    dst_row = (unsigned char *)fb_mono_base + fb_y * fb_mono_rowbytes;
+
+    xfrac = ds_xfrac;
+    yfrac = ds_yfrac;
+    count = ds_x2 - ds_x1;
+    x     = ds_x1;
+
+    do {
+        int           spot    = ((yfrac >> (16-6)) & (63*64)) + ((xfrac >> 16) & 63);
+        byte          gray    = grayscale_pal[ds_colormap[ds_source[spot]]];
+        int           fb_x    = x + viewwindowx + fb_mono_xoff;
+        int           bidx    = fb_x >> 3;
+        unsigned char bitmask = (unsigned char)(0x80 >> (fb_x & 7));
+
+        if (gray < bayer4x4[(ds_y + viewwindowy) & 3][fb_x & 3])
+            dst_row[bidx] |= bitmask;
+        else
+            dst_row[bidx] &= (unsigned char)(~bitmask);
+
+        xfrac += ds_xstep;
+        yfrac += ds_ystep;
+        x++;
+    } while (count--);
+}
+
+
+/*
+ * R_DrawSpanLow_Mono
+ * Low-detail floor/ceiling span renderer → direct 1-bit framebuffer.
+ * ds_x1/ds_x2 arrive in low-detail coords (0..viewwidth-1).
+ * Each logical pixel maps to 2 consecutive screen pixels.
+ */
+void R_DrawSpanLow_Mono(void)
+{
+    fixed_t         xfrac, yfrac;
+    int             count;
+    int             fb_y;
+    unsigned char  *dst_row;
+    int             half_x;   /* low-detail x (advances by 1 per step) */
+
+    fb_y    = ds_y + viewwindowy + fb_mono_yoff;
+    dst_row = (unsigned char *)fb_mono_base + fb_y * fb_mono_rowbytes;
+
+    xfrac  = ds_xfrac;
+    yfrac  = ds_yfrac;
+    count  = ds_x2 - ds_x1;   /* ds_x1/ds_x2 in low-detail coords */
+    half_x = ds_x1;
+
+    do {
+        int           spot  = ((yfrac >> (16-6)) & (63*64)) + ((xfrac >> 16) & 63);
+        byte          gray  = grayscale_pal[ds_colormap[ds_source[spot]]];
+        /* full-res screen x for left and right pixel of this low-detail column */
+        int           sx    = half_x << 1;
+        int           fb_x0 = sx + viewwindowx + fb_mono_xoff;
+        int           fb_x1 = fb_x0 + 1;
+        int           b0    = fb_x0 >> 3;
+        int           b1    = fb_x1 >> 3;
+        unsigned char m0    = (unsigned char)(0x80 >> (fb_x0 & 7));
+        unsigned char m1    = (unsigned char)(0x80 >> (fb_x1 & 7));
+        byte          thr0  = bayer4x4[(ds_y + viewwindowy) & 3][fb_x0 & 3];
+        byte          thr1  = bayer4x4[(ds_y + viewwindowy) & 3][fb_x1 & 3];
+
+        if (gray < thr0) dst_row[b0] |= m0; else dst_row[b0] &= (unsigned char)(~m0);
+        if (gray < thr1) dst_row[b1] |= m1; else dst_row[b1] &= (unsigned char)(~m1);
+
+        xfrac  += ds_xstep;
+        yfrac  += ds_ystep;
+        half_x++;
+    } while (count--);
+}

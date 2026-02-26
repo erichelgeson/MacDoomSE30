@@ -46,6 +46,14 @@ extern byte*		dc_source;
 void 	R_DrawColumn (void);
 void 	R_DrawColumnLow (void);
 
+// Direct 1-bit mono renderers (Phase 4 — write straight to framebuffer).
+void	R_DrawColumn_Mono (void);
+void	R_DrawColumnLow_Mono (void);
+void	R_DrawFuzzColumn_Mono (void);
+void	R_DrawTranslatedColumn_Mono (void);
+void	R_DrawSpan_Mono (void);
+void	R_DrawSpanLow_Mono (void);
+
 // The Spectre/Invisibility effect.
 void 	R_DrawFuzzColumn (void);
 void 	R_DrawFuzzColumnLow (void);

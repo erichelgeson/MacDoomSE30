@@ -38,17 +38,7 @@ rcsid[] = "$Id: m_bbox.c,v 1.1 1997/02/03 22:45:10 b1 Exp $";
 
 
 
-// Fixme. __USE_C_FIXED__ or something.
-
-fixed_t
-FixedMul
-( fixed_t	a,
-  fixed_t	b )
-{
-    return ((long long) a * (long long) b) >> FRACBITS;
-}
-
-
+// FixedMul is now a macro in m_fixed.h — no function body needed.
 
 //
 // FixedDiv, C version.
@@ -71,17 +61,9 @@ FixedDiv2
 ( fixed_t	a,
   fixed_t	b )
 {
-#if 0
-    long long c;
-    c = ((long long)a<<16) / ((long long)b);
-    return (fixed_t) c;
-#endif
-
-    double c;
-
-    c = ((double)a) / ((double)b) * FRACUNIT;
-
-    if (c >= 2147483648.0 || c < -2147483648.0)
-	I_Error("FixedDiv: divide by zero");
+    /* Integer-only implementation — avoids FPU dependency.
+     * On SE/30 without a 68882 FPU, double math traps to software emulation
+     * at ~100x the cost.  long long shift+divide is always fast on 68030. */
+    long long c = ((long long)a << FRACBITS) / (long long)b;
     return (fixed_t) c;
 }

@@ -30,6 +30,7 @@ static const char rcsid[] = "$Id: r_main.c,v 1.5 1997/02/03 22:45:12 b1 Exp $";
 
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 
 #include "doomdef.h"
@@ -39,6 +40,7 @@ static const char rcsid[] = "$Id: r_main.c,v 1.5 1997/02/03 22:45:12 b1 Exp $";
 
 #include "r_local.h"
 #include "r_sky.h"
+#include "v_video.h"
 
 
 
@@ -701,17 +703,18 @@ void R_ExecuteSetViewSize (void)
 
     if (!detailshift)
     {
-	colfunc = basecolfunc = R_DrawColumn;
-	fuzzcolfunc = R_DrawFuzzColumn;
-	transcolfunc = R_DrawTranslatedColumn;
-	spanfunc = R_DrawSpan;
+	/* Phase 4: use direct 1-bit renderers for 68030 SE/30 performance */
+	colfunc    = basecolfunc = R_DrawColumn_Mono;
+	fuzzcolfunc  = R_DrawFuzzColumn_Mono;
+	transcolfunc = R_DrawTranslatedColumn_Mono;
+	spanfunc     = R_DrawSpan_Mono;
     }
     else
     {
-	colfunc = basecolfunc = R_DrawColumnLow;
-	fuzzcolfunc = R_DrawFuzzColumn;
-	transcolfunc = R_DrawTranslatedColumn;
-	spanfunc = R_DrawSpanLow;
+	colfunc    = basecolfunc = R_DrawColumnLow_Mono;
+	fuzzcolfunc  = R_DrawFuzzColumn_Mono;
+	transcolfunc = R_DrawTranslatedColumn_Mono;
+	spanfunc     = R_DrawSpanLow_Mono;
     }
 
     R_InitBuffer (scaledviewwidth, viewheight);
@@ -868,7 +871,18 @@ void R_SetupFrame (player_t* player)
 // R_RenderView
 //
 void R_RenderPlayerView (player_t* player)
-{	
+{
+    int y;
+
+    /* Phase 4: clear the screens[0] view area to 0 before rendering.
+     * The mono renderers write directly to the 1-bit framebuffer and do not
+     * touch screens[0].  I_FinishUpdate treats non-zero screens[0] view pixels
+     * as HUD/menu overlays and blits them on top of the direct render.
+     * Pre-clearing ensures only genuine HUD content (non-zero) gets overlaid. */
+    for (y = 0; y < viewheight; y++)
+	memset(screens[0] + (viewwindowy + y) * SCREENWIDTH + viewwindowx,
+	       0, scaledviewwidth);
+
     R_SetupFrame (player);
 
     // Clear buffers.

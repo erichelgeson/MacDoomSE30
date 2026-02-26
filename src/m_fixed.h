@@ -37,7 +37,10 @@
 
 typedef int fixed_t;
 
-fixed_t FixedMul	(fixed_t a, fixed_t b);
+/* FixedMul inlined as a macro — avoids function-call overhead (~20 cycles on 68030).
+ * Called thousands of times per frame (BSP, projection, texture mapping). */
+#define FixedMul(a,b) ((fixed_t)(((long long)(a) * (long long)(b)) >> FRACBITS))
+
 fixed_t FixedDiv	(fixed_t a, fixed_t b);
 fixed_t FixedDiv2	(fixed_t a, fixed_t b);
 

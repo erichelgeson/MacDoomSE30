@@ -312,7 +312,18 @@ void D_Display (void)
 
 
     // menus go directly to the screen
-    M_Drawer ();          // menu is drawn even on top of everything
+    /* Redirect M_Drawer to menu_overlay_buf so menu pixels are cleanly
+     * separated from border/status bar content in screens[0].
+     * screens[1] is Doom's border tile cache — do NOT use it here.
+     * I_FinishUpdate applies menu_overlay_buf as solid white over the full screen. */
+    {
+	extern byte *menu_overlay_buf;
+	byte *saved = screens[0];
+	memset(menu_overlay_buf, 0, SCREENWIDTH * SCREENHEIGHT);
+	screens[0] = menu_overlay_buf;
+	M_Drawer ();          // menu is drawn even on top of everything
+	screens[0] = saved;
+    }
     NetUpdate ();         // send out any new accumulation
 
 
@@ -328,6 +339,12 @@ void D_Display (void)
 
     wipestart = I_GetTime () - 1;
 
+    /* Tell I_FinishUpdate to do a full blit during the wipe.
+     * The direct 1-bit rendering path must be suppressed so that
+     * wipe_ScreenWipe has exclusive control over screens[0]/framebuffer. */
+    extern boolean wipe_in_progress;
+    wipe_in_progress = true;
+
     do
     {
 	do
@@ -339,9 +356,11 @@ void D_Display (void)
 	done = wipe_ScreenWipe(wipe_Melt
 			       , 0, 0, SCREENWIDTH, SCREENHEIGHT, tics);
 	I_UpdateNoBlit ();
-	M_Drawer ();                            // menu is drawn even on top of wipes
+	{ extern byte *menu_overlay_buf; byte *saved = screens[0]; memset(menu_overlay_buf, 0, SCREENWIDTH * SCREENHEIGHT); screens[0] = menu_overlay_buf; M_Drawer (); screens[0] = saved; }  // menu overlay
 	I_FinishUpdate ();                      // page flip or blit buffer
     } while (!done);
+
+    wipe_in_progress = false;
 }
 
 
@@ -353,9 +372,13 @@ extern  boolean         demorecording;
 
 void D_DoomLoop (void)
 {
+    /* Frame timing counters: display frames per 35 game tics (~1 second) */
+    int  ft_frames    = 0;
+    int  ft_last_tic  = 0;
+
     if (demorecording)
 	G_BeginRecording ();
-		
+
     if (M_CheckParm ("-debugfile"))
     {
 	char    filename[20];
@@ -363,14 +386,14 @@ void D_DoomLoop (void)
 	printf ("debug output to: %s\n",filename);
 	debugfile = fopen (filename,"w");
     }
-	
+
     I_InitGraphics ();
 
     while (1)
     {
 	// frame syncronous IO operations
-	I_StartFrame ();                
-	
+	I_StartFrame ();
+
 	// process one or more tics
 	if (singletics)
 	{
@@ -388,21 +411,31 @@ void D_DoomLoop (void)
 	{
 	    TryRunTics (); // will run at least one tic
 	}
-		
+
 	S_UpdateSounds (players[consoleplayer].mo);// move positional sounds
 
 	// Update display, next frame, with current state.
 	D_Display ();
 
+	ft_frames++;
+
 #ifndef SNDSERV
 	// Sound mixing for the buffer is snychronous.
 	I_UpdateSound();
-#endif	
+#endif
 	// Synchronous sound output is explicitly called.
 #ifndef SNDINTR
 	// Update sound output.
 	I_SubmitSound();
 #endif
+
+	/* Log display frame rate every 35 game tics (~1 second) */
+	if (gametic - ft_last_tic >= 35)
+	{
+	    doom_log("FPS: %d display frames per 35 tics\r", ft_frames);
+	    ft_frames   = 0;
+	    ft_last_tic = gametic;
+	}
     }
 }
 

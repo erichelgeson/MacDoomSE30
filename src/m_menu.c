@@ -1081,14 +1081,14 @@ void M_QuitResponse(int ch)
 {
     if (ch != 'y')
 	return;
+    doom_log("M_QuitResponse: quit confirmed\n");
     if (!netgame)
     {
-	if (gamemode == commercial)
-	    S_StartSound(NULL,quitsounds2[(gametic>>2)&7]);
-	else
-	    S_StartSound(NULL,quitsounds[(gametic>>2)&7]);
-	I_WaitVBL(105);
+	/* Skip the quit sound wait — I_WaitVBL busy-waits 1.5s with no
+	 * event processing, which can crash System 7 (cooperative MT).
+	 * Sound is currently a stub anyway. */
     }
+    doom_log("M_QuitResponse: calling I_Quit\n");
     I_Quit ();
 }
 
