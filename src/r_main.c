@@ -751,7 +751,34 @@ void R_ExecuteSetViewSize (void)
     }
 
     R_InitBuffer (scaledviewwidth, viewheight);
-	
+
+    /* Clear the 1-bit framebuffer view area after a view-size change.
+     * The old view area may contain stale direct-render pixels that now fall
+     * inside the new border region (shrink) or in the expanded view area
+     * (grow).  Clearing here, before the next R_RenderPlayerView, avoids
+     * residual ghost pixels from the previous viewport size. */
+    {
+	extern void   *fb_mono_base;
+	extern int     fb_mono_rowbytes;
+	extern int     fb_mono_xoff;
+	extern int     fb_mono_yoff;
+	doom_log("RESV: vwx=%d vwy=%d vw=%d scvw=%d vh=%d fb=%p\r",
+		 viewwindowx, viewwindowy, viewwidth, scaledviewwidth, viewheight, fb_mono_base);
+	if (fb_mono_base && scaledviewwidth > 0 && viewheight > 0) {
+	    doom_log("RESV: CLEAR fb view area (resize) n=%d\r",
+		     scaledviewwidth >> 3);
+	    int n_bytes = scaledviewwidth >> 3;  /* low-detail: scaledviewwidth=2*viewwidth */
+	    int x_byte  = (viewwindowx + fb_mono_xoff) >> 3;
+	    int fy;
+	    for (fy = 0; fy < viewheight; fy++) {
+		int fb_y = viewwindowy + fy + fb_mono_yoff;
+		memset((unsigned char*)fb_mono_base
+		       + fb_y * fb_mono_rowbytes + x_byte,
+		       0x00, n_bytes);
+	    }
+	}
+    }
+
     R_InitTextureMapping ();
     
     // psprite scales
@@ -917,10 +944,57 @@ void R_RenderPlayerView (player_t* player)
      * I_FinishUpdate will do a full blit (no selective overlay) anyway. */
     {
 	extern boolean menuactive;
-	if (!menuactive)
+	extern void   *fb_mono_base;
+	extern int     fb_mono_rowbytes;
+	extern int     fb_mono_xoff;
+	extern int     fb_mono_yoff;
+
+	if (!menuactive) {
+	    /* Clear screens[0] view area: non-zero pixels are treated as HUD overlay
+	     * by I_FinishUpdate and blitted on top of the direct 1-bit render. */
 	    for (y = 0; y < viewheight; y++)
 		memset(screens[0] + (viewwindowy + y) * SCREENWIDTH + viewwindowx,
 		       0, scaledviewwidth);
+
+	    /* Half-line (#2): odd rows are NOT pre-cleared.  They retain the previous
+	     * frame's even-row data (temporal interlacing).  This eliminates the white
+	     * flash that occurred when clearing odd rows to 0x00 at frame start — on a
+	     * non-double-buffered display the cleared rows were visible for the entire
+	     * render time (~300-500ms at 2-3 FPS). */
+	}
+
+	/* On menu→gameplay transition: clear the 1-bit FB view area.
+	 * The preceding non-direct frame wrote a full-blit of screens[0] (mostly
+	 * black + menu text) into the 1-bit framebuffer.  The direct renderers
+	 * overwrite most pixels, but any edge-cases they miss leave a permanent
+	 * ghost (the display is live; there is no back-buffer).  A one-time clear
+	 * ensures a clean slate; the direct render fills everything in immediately.
+	 * 0x00 = white on Mac 1-bit display. */
+	{
+	    static boolean prev_menuactive = false;
+	    /* Instrument: log every menuactive state change seen here */
+	    if (menuactive != prev_menuactive) {
+		doom_log("RRV: menuactive %d->%d fb=%p vwx=%d vwy=%d vw=%d vh=%d\r",
+			 (int)prev_menuactive, (int)menuactive,
+			 fb_mono_base,
+			 viewwindowx, viewwindowy, viewwidth, viewheight);
+	    }
+	    if (prev_menuactive && !menuactive && fb_mono_base) {
+		doom_log("RRV: CLEAR fb view area (menu dismissed) scvw=%d\r",
+			 scaledviewwidth);
+		int x_byte = (viewwindowx + fb_mono_xoff) >> 3;
+		int n_bytes = scaledviewwidth >> 3;  /* low-detail: scaledviewwidth=2*viewwidth */
+		for (y = 0; y < viewheight; y++) {
+		    int fb_y = viewwindowy + y + fb_mono_yoff;
+		    memset((unsigned char*)fb_mono_base
+			   + fb_y * fb_mono_rowbytes + x_byte,
+			   0x00, n_bytes);
+		}
+	    } else if (prev_menuactive && !menuactive) {
+		doom_log("RRV: menu dismissed but fb_mono_base=NULL, no clear\r");
+	    }
+	    prev_menuactive = menuactive;
+	}
     }
 
     R_SetupFrame (player);
@@ -948,4 +1022,28 @@ void R_RenderPlayerView (player_t* player)
     R_DrawMasked ();
     if (netgame) NetUpdate ();
     prof_r_masked += I_GetMacTick() - _t; }
+
+    /* Half-line scanline doubling: after the direct renderer fills even FB rows,
+     * copy each even row to the adjacent odd row.  This replaces temporal
+     * interlacing with same-frame doubling, which avoids:
+     *   - White stripes (odd rows cleared but never re-rendered)
+     *   - Ghost images (odd rows left with stale menu/wipe content)
+     * Cost is trivial: N/2 memcpy calls of ~40 bytes each. */
+    {
+	extern int   opt_halfline;
+	extern void *fb_mono_base;
+	extern int   fb_mono_rowbytes;
+	extern int   fb_mono_xoff;
+	extern int   fb_mono_yoff;
+	if (opt_halfline && fb_mono_base && scaledviewwidth > 0 && viewheight > 1) {
+	    int x_byte = (viewwindowx + fb_mono_xoff) >> 3;
+	    int n_bytes = scaledviewwidth >> 3;
+	    int ey;
+	    for (ey = 0; ey + 1 < viewheight; ey += 2) {
+		unsigned char *even_row = (unsigned char*)fb_mono_base
+		    + (viewwindowy + ey + fb_mono_yoff) * fb_mono_rowbytes + x_byte;
+		memcpy(even_row + fb_mono_rowbytes, even_row, n_bytes);
+	    }
+	}
+    }
 }

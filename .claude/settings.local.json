@@ -14,7 +14,8 @@
       "Bash(hdiutil imageinfo:*)",
       "Bash(chmod +x:*)",
       "Bash(git init:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "WebFetch(domain:doomwiki.org)"
     ]
   }
 }

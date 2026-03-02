@@ -203,6 +203,11 @@ extern int	screenblocks;
 
 extern int	showMessages;
 
+/* SE/30 performance opt flags (defined in d_main.c) */
+extern int	opt_halfline;
+extern int	opt_affine_texcol;
+extern int	opt_solidfloor;
+
 // machine-independent sound params
 extern	int	numChannels;
 
@@ -278,6 +283,11 @@ default_t	defaults[] =
 
     {"screenblocks",&screenblocks, 7},
     {"detaillevel",&detailLevel, 1},
+
+    /* SE/30 performance opts: set to 1 in doom.cfg to enable */
+    {"halfline",   &opt_halfline,      0},
+    {"affinetex",  &opt_affine_texcol, 0},
+    {"solidfloor", &opt_solidfloor,    0},
 
     {"snd_channels",&numChannels, 3},
 

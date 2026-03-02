@@ -571,6 +571,14 @@ void I_FinishUpdate(void)
     /* Track direct/non-direct transitions for border cache logic. */
     static boolean last_direct = false;
 
+    /* Instrument: log every is_direct state change */
+    if (is_direct != last_direct) {
+        doom_log("IFU: is_direct %d->%d gs=%d ma=%d wipe=%d fb=%p\r",
+                 (int)last_direct, (int)is_direct,
+                 (int)gamestate, (int)menuactive,
+                 (int)wipe_in_progress, fb_mono_base);
+    }
+
     if (is_direct) {
         /* Cached view geometry (constant while screenblocks unchanged). */
         const int vx0   = viewwindowx;              /* 48  — 8-aligned */
@@ -674,6 +682,11 @@ void I_FinishUpdate(void)
 
     /* Menu overlay: solid-white mask applied over the full screen.
      * Only runs when the menu is open (menuactive implies !is_direct). */
+    {   static boolean prev_ma_overlay = false;
+        if (menuactive != prev_ma_overlay)
+            doom_log("IFU: menu_overlay path %s (is_direct=%d)\r",
+                     menuactive ? "ENTER" : "EXIT", (int)is_direct);
+        prev_ma_overlay = menuactive; }
     if (menuactive && menu_overlay_buf) {
         byte *overlay = menu_overlay_buf;
         for (y = 0; y < SCREENHEIGHT; y++) {

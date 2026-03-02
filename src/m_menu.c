@@ -68,6 +68,8 @@ rcsid[] = "$Id: m_menu.c,v 1.7 1997/02/03 22:45:10 b1 Exp $";
 extern patch_t*		hu_font[HU_FONTSIZE];
 extern boolean		message_dontfuckwithme;
 
+extern int		opt_solidfloor;   /* SE/30 perf opt: solid floor/ceiling fill */
+
 extern boolean		chat_on;		// in heads-up code
 
 //
@@ -1601,7 +1603,13 @@ boolean M_Responder (event_t* ev)
 	    players[consoleplayer].message = gammamsg[usegamma];
 	    I_SetPalette (W_CacheLumpName ("PLAYPAL",PU_CACHE));
 	    return true;
-				
+
+	  case KEY_F12:           // SE/30: toggle solid floor/ceiling fill
+	    opt_solidfloor ^= 1;
+	    players[consoleplayer].message = opt_solidfloor
+		? "Solid floors: ON" : "Solid floors: OFF";
+	    return true;
+
 	}
 
     

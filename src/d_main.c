@@ -101,6 +101,14 @@ boolean         drone;
 
 boolean		singletics = false; // debug flag to cancel adaptiveness
 
+/* SE/30 performance opt flags — enabled via doom.cfg (default OFF).
+ * halfline    : render only even framebuffer rows (50% fewer pixel writes, visible scanlines)
+ * affinetex   : linear-interpolate texture column per wall (saves ~80 cycles/col)
+ * solidfloor  : fill floor/ceiling with solid colour (skip per-pixel texture mapping) */
+int opt_halfline      = 0;
+int opt_affine_texcol = 0;
+int opt_solidfloor    = 0;
+
 
 
 //extern int soundVolume;
@@ -938,6 +946,8 @@ void D_DoomMain (void)
     respawnparm = M_CheckParm ("-respawn");
     fastparm = M_CheckParm ("-fast");
     devparm = M_CheckParm ("-devparm");
+    if (M_CheckParm ("-halfline"))   opt_halfline      = 1;
+    if (M_CheckParm ("-affinetex"))  opt_affine_texcol = 1;
     if (M_CheckParm ("-altdeath"))
 	deathmatch = 2;
     else if (M_CheckParm ("-deathmatch"))
@@ -1146,7 +1156,9 @@ void D_DoomMain (void)
     printf ("M_LoadDefaults: Load system defaults.\n");
     doom_log ("CHKPT: entering M_LoadDefaults\n");
     M_LoadDefaults ();              // load before initing other systems
-    doom_log ("CHKPT: M_LoadDefaults done\n");
+    doom_log ("CHKPT: M_LoadDefaults done\r");
+    doom_log("D_DoomMain: opt_halfline=%d opt_affine_texcol=%d opt_solidfloor=%d\r",
+             opt_halfline, opt_affine_texcol, opt_solidfloor);
 
     printf ("Z_Init: Init zone memory allocation daemon. \n");
     doom_log ("CHKPT: entering Z_Init\n");

@@ -74,6 +74,12 @@ fixed_t		rw_scalestep;
  * with: dc_iscale = rw_iscale; rw_iscale += rw_iscalestep  (~2 cycles each). */
 static fixed_t  rw_iscale;
 static fixed_t  rw_iscalestep;
+/* Affine texture column stepping — replaces FixedMul(finetangent,rw_distance) per column
+ * (~70 cycles each) with a single addition (~2 cycles each).
+ * Enabled by opt_affine_texcol (-affinetex arg), default OFF. */
+static fixed_t  rw_texcol;
+static fixed_t  rw_texstep;
+extern int opt_affine_texcol;
 fixed_t		rw_midtexturemid;
 fixed_t		rw_toptexturemid;
 fixed_t		rw_bottomtexturemid;
@@ -225,7 +231,6 @@ R_RenderMaskedSegRange
 
 void R_RenderSegLoop (void)
 {
-    angle_t		angle;
     unsigned		index;
     int			yl;
     int			yh;
@@ -234,7 +239,7 @@ void R_RenderSegLoop (void)
     int			top;
     int			bottom;
 
-    //texturecolumn = 0;				// shut up compiler warning
+    texturecolumn = 0;				// shut up compiler warning
 	
     for ( ; rw_x < rw_stopx ; rw_x++)
     {
@@ -281,10 +286,14 @@ void R_RenderSegLoop (void)
 	// texturecolumn and lighting are independent of wall tiers
 	if (segtextured)
 	{
-	    // calculate texture offset
-	    angle = (rw_centerangle + xtoviewangle[rw_x])>>ANGLETOFINESHIFT;
-	    texturecolumn = rw_offset-FixedMul(finetangent[angle],rw_distance);
-	    texturecolumn >>= FRACBITS;
+	    /* Affine stepping (opt_affine_texcol) or original per-column FixedMul */
+	    if (opt_affine_texcol) {
+		texturecolumn = rw_texcol >> FRACBITS;
+		rw_texcol += rw_texstep;
+	    } else {
+		angle_t a = (rw_centerangle + xtoviewangle[rw_x]) >> ANGLETOFINESHIFT;
+		texturecolumn = (rw_offset - FixedMul(finetangent[a], rw_distance)) >> FRACBITS;
+	    }
 	    // calculate lighting
 	    index = rw_scale>>LIGHTSCALESHIFT;
 
@@ -689,8 +698,22 @@ R_StoreWallRange
 	    else
 		walllights = scalelight[lightnum];
 	}
+
+	/* Affine texture column stepping (opt_affine_texcol, -affinetex arg):
+	 * Precompute per-wall start/step to replace per-column FixedMul (~80 cycles)
+	 * with a single addition (~2 cycles). */
+	if (opt_affine_texcol) {
+	    angle_t a0 = (rw_centerangle + xtoviewangle[rw_x]) >> ANGLETOFINESHIFT;
+	    rw_texcol = rw_offset - FixedMul(finetangent[a0], rw_distance);
+	    if (rw_stopx > rw_x + 1) {
+		angle_t a1 = (rw_centerangle + xtoviewangle[rw_stopx - 1]) >> ANGLETOFINESHIFT;
+		fixed_t t1 = rw_offset - FixedMul(finetangent[a1], rw_distance);
+		rw_texstep = (t1 - rw_texcol) / (rw_stopx - 1 - rw_x);
+	    } else
+		rw_texstep = 0;
+	}
     }
-    
+
     // if a floor / ceiling plane is on the wrong side
     //  of the view plane, it is definitely invisible
     //  and doesn't need to be marked.
