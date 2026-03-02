@@ -207,6 +207,8 @@ extern int	showMessages;
 extern int	opt_halfline;
 extern int	opt_affine_texcol;
 extern int	opt_solidfloor;
+extern int	solidfloor_gray;
+extern int	fog_scale;
 
 // machine-independent sound params
 extern	int	numChannels;
@@ -285,9 +287,16 @@ default_t	defaults[] =
     {"detaillevel",&detailLevel, 1},
 
     /* SE/30 performance opts: set to 1 in doom.cfg to enable */
-    {"halfline",   &opt_halfline,      0},
-    {"affinetex",  &opt_affine_texcol, 0},
-    {"solidfloor", &opt_solidfloor,    0},
+    /* halfline now defaults ON — double-buffering eliminates the white flash */
+    {"halfline",        &opt_halfline,      1},
+    {"affinetex",       &opt_affine_texcol, 0},
+    {"solidfloor",      &opt_solidfloor,    0},
+    /* solidfloor_gray: 0=white 1=25% 2=50% 3=75% 4=black */
+    {"solidfloor_gray", &solidfloor_gray,   0},
+    /* fog_scale: distance fog threshold in fixed_t units (0=off).
+     * Wall/sprite columns with scale < fog_scale use solid background fill.
+     * Tuned in-game with ` (increase) and \ (decrease), saved with K. */
+    {"fog_scale",       &fog_scale,         0},
 
     {"snd_channels",&numChannels, 3},
 

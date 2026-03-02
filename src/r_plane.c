@@ -39,6 +39,7 @@ rcsid[] = "$Id: r_plane.c,v 1.4 1997/02/03 16:47:55 b1 Exp $";
 #include "r_local.h"
 #include "r_sky.h"
 
+extern int opt_solidfloor;
 
 
 planefunction_t		floorfunc;
@@ -420,6 +421,10 @@ void R_DrawPlanes (void)
 	}
 	
 	// regular flat
+	/* opt_solidfloor=1: spanfunc is a no-op — skip all flat rendering work. */
+	if (opt_solidfloor)
+	    continue;
+
 	ds_source = W_CacheLumpNum(firstflat +
 				   flattranslation[pl->picnum],
 				   PU_STATIC);

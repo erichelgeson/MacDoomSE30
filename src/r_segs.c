@@ -80,6 +80,9 @@ static fixed_t  rw_iscalestep;
 static fixed_t  rw_texcol;
 static fixed_t  rw_texstep;
 extern int opt_affine_texcol;
+extern int opt_halfline;
+extern int opt_solidfloor;
+extern int fog_scale;
 fixed_t		rw_midtexturemid;
 fixed_t		rw_toptexturemid;
 fixed_t		rw_bottomtexturemid;
@@ -226,7 +229,10 @@ R_RenderMaskedSegRange
 //  textures.
 // CALLED: CORE LOOPING ROUTINE.
 //
-#define HEIGHTBITS		12
+/* HEIGHTBITS=16 lets GCC emit SWAP+EXT.L (8 cycles) for >>HEIGHTBITS instead of
+ * two ASR.L (12 cycles). Requires topfrac/bottomfrac/pixhigh/pixlow scaled ×16
+ * in R_StoreWallRange (see below). Net saving: ~4 cycles/shift × 4 shifts/col. */
+#define HEIGHTBITS		16
 #define HEIGHTUNIT		(1<<HEIGHTBITS)
 
 void R_RenderSegLoop (void)
@@ -240,17 +246,43 @@ void R_RenderSegLoop (void)
     int			bottom;
 
     texturecolumn = 0;				// shut up compiler warning
-	
+
+    /* C: LOD — minimum column height worth calling colfunc.
+     * In halfline mode a 1-pixel column (yl==yh) renders ≤1 pixel (50% chance even row).
+     * Skip it: save R_GetColumn + colfunc call overhead for these tiny slivers. */
+    int lod_min_height = opt_halfline ? 1 : 0;
+
+    /* E: Visplane mark optimisation.
+     * ceilingplane->top[]/bottom[] and floorplane->top[]/bottom[] are only consumed
+     * by R_DrawPlanes for flat (floor/ceiling) rendering.  When opt_solidfloor=1,
+     * R_DrawPlanes skips all flat rendering — so writing those arrays is wasted work.
+     * Exception: the sky ceiling is rendered from ceilingplane in R_DrawPlanes even
+     * when opt_solidfloor=1, so we must still mark it for sky-ceiling segments.
+     *
+     * NOTE: ceilingclip[]/floorclip[] BSP clip arrays are NOT affected — they must
+     * always be updated so subsequent segments clip correctly. Only the visplane
+     * top[]/bottom[] writes are suppressed. */
+    boolean loop_markceiling = markceiling &&
+        (!opt_solidfloor || frontsector->ceilingpic == skyflatnum);
+    boolean loop_markfloor = markfloor && !opt_solidfloor;
+
     for ( ; rw_x < rw_stopx ; rw_x++)
     {
+	/* Fog: columns beyond fog_scale threshold are skipped — the solidfloor
+	 * background shows through them, giving a free distance-fog effect.
+	 * BSP clip arrays (ceilingclip/floorclip) are still updated so
+	 * subsequent segments clip correctly. Only colfunc draws are skipped. */
+	int in_fog = (fog_scale > 0 && rw_scale < fog_scale);
+
 	// mark floor / ceiling areas
 	yl = (topfrac+HEIGHTUNIT-1)>>HEIGHTBITS;
 
 	// no space above wall?
 	if (yl < ceilingclip[rw_x]+1)
 	    yl = ceilingclip[rw_x]+1;
-	
-	if (markceiling)
+
+	/* E: write to visplane top[]/bottom[] only when needed */
+	if (loop_markceiling)
 	{
 	    top = ceilingclip[rw_x]+1;
 	    bottom = yl-1;
@@ -264,13 +296,14 @@ void R_RenderSegLoop (void)
 		ceilingplane->bottom[rw_x] = bottom;
 	    }
 	}
-		
+
 	yh = bottomfrac>>HEIGHTBITS;
 
 	if (yh >= floorclip[rw_x])
 	    yh = floorclip[rw_x]-1;
 
-	if (markfloor)
+	/* E: write to floorplane top[]/bottom[] only when needed */
+	if (loop_markfloor)
 	{
 	    top = yh+1;
 	    bottom = floorclip[rw_x]-1;
@@ -282,7 +315,7 @@ void R_RenderSegLoop (void)
 		floorplane->bottom[rw_x] = bottom;
 	    }
 	}
-	
+
 	// texturecolumn and lighting are independent of wall tiers
 	if (segtextured)
 	{
@@ -306,7 +339,7 @@ void R_RenderSegLoop (void)
 	    dc_iscale = rw_iscale;
 	    rw_iscale += rw_iscalestep;
 	}
-	
+
 	// draw the wall tiers
 	if (midtexture)
 	{
@@ -314,8 +347,12 @@ void R_RenderSegLoop (void)
 	    dc_yl = yl;
 	    dc_yh = yh;
 	    dc_texturemid = rw_midtexturemid;
-	    dc_source = R_GetColumn(midtexture,texturecolumn);
-	    colfunc ();
+	    /* C: LOD; fog: skip draw if too thin or beyond fog distance */
+	    if (!in_fog && dc_yh >= dc_yl + lod_min_height)
+	    {
+		dc_source = R_GetColumn(midtexture,texturecolumn);
+		colfunc ();
+	    }
 	    ceilingclip[rw_x] = viewheight;
 	    floorclip[rw_x] = -1;
 	}
@@ -336,8 +373,12 @@ void R_RenderSegLoop (void)
 		    dc_yl = yl;
 		    dc_yh = mid;
 		    dc_texturemid = rw_toptexturemid;
-		    dc_source = R_GetColumn(toptexture,texturecolumn);
-		    colfunc ();
+		    /* C: LOD; fog */
+		    if (!in_fog && mid >= yl + lod_min_height)
+		    {
+			dc_source = R_GetColumn(toptexture,texturecolumn);
+			colfunc ();
+		    }
 		    ceilingclip[rw_x] = mid;
 		}
 		else
@@ -345,11 +386,11 @@ void R_RenderSegLoop (void)
 	    }
 	    else
 	    {
-		// no top wall
+		// no top wall — BSP clip must still update
 		if (markceiling)
 		    ceilingclip[rw_x] = yl-1;
 	    }
-			
+
 	    if (bottomtexture)
 	    {
 		// bottom wall
@@ -359,15 +400,19 @@ void R_RenderSegLoop (void)
 		// no space above wall?
 		if (mid <= ceilingclip[rw_x])
 		    mid = ceilingclip[rw_x]+1;
-		
+
 		if (mid <= yh)
 		{
 		    dc_yl = mid;
 		    dc_yh = yh;
 		    dc_texturemid = rw_bottomtexturemid;
-		    dc_source = R_GetColumn(bottomtexture,
-					    texturecolumn);
-		    colfunc ();
+		    /* C: LOD; fog */
+		    if (!in_fog && yh >= mid + lod_min_height)
+		    {
+			dc_source = R_GetColumn(bottomtexture,
+						texturecolumn);
+			colfunc ();
+		    }
 		    floorclip[rw_x] = mid;
 		}
 		else
@@ -375,11 +420,11 @@ void R_RenderSegLoop (void)
 	    }
 	    else
 	    {
-		// no bottom wall
+		// no bottom wall — BSP clip must still update
 		if (markfloor)
 		    floorclip[rw_x] = yh+1;
 	    }
-			
+
 	    if (maskedtexture)
 	    {
 		// save texturecol
@@ -387,7 +432,7 @@ void R_RenderSegLoop (void)
 		maskedtexturecol[rw_x] = texturecolumn;
 	    }
 	}
-		
+
 	rw_scale += rw_scalestep;
 	topfrac += topstep;
 	bottomfrac += bottomstep;
@@ -737,11 +782,12 @@ R_StoreWallRange
     worldtop >>= 4;
     worldbottom >>= 4;
 	
-    topstep = -FixedMul (rw_scalestep, worldtop);
-    topfrac = (centeryfrac>>4) - FixedMul (worldtop, rw_scale);
+    /* Scale ×16 so >>HEIGHTBITS (now 16) uses SWAP+EXT.L instead of two ASR.L. */
+    topstep = -FixedMul (rw_scalestep, worldtop) << 4;
+    topfrac = ((centeryfrac>>4) - FixedMul (worldtop, rw_scale)) << 4;
 
-    bottomstep = -FixedMul (rw_scalestep,worldbottom);
-    bottomfrac = (centeryfrac>>4) - FixedMul (worldbottom, rw_scale);
+    bottomstep = -FixedMul (rw_scalestep,worldbottom) << 4;
+    bottomfrac = ((centeryfrac>>4) - FixedMul (worldbottom, rw_scale)) << 4;
 	
     if (backsector)
     {	
@@ -750,14 +796,14 @@ R_StoreWallRange
 
 	if (worldhigh < worldtop)
 	{
-	    pixhigh = (centeryfrac>>4) - FixedMul (worldhigh, rw_scale);
-	    pixhighstep = -FixedMul (rw_scalestep,worldhigh);
+	    pixhigh = ((centeryfrac>>4) - FixedMul (worldhigh, rw_scale)) << 4;
+	    pixhighstep = -FixedMul (rw_scalestep,worldhigh) << 4;
 	}
-	
+
 	if (worldlow > worldbottom)
 	{
-	    pixlow = (centeryfrac>>4) - FixedMul (worldlow, rw_scale);
-	    pixlowstep = -FixedMul (rw_scalestep,worldlow);
+	    pixlow = ((centeryfrac>>4) - FixedMul (worldlow, rw_scale)) << 4;
+	    pixlowstep = -FixedMul (rw_scalestep,worldlow) << 4;
 	}
     }
     

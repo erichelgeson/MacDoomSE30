@@ -948,6 +948,8 @@ void R_RenderPlayerView (player_t* player)
 	extern int     fb_mono_rowbytes;
 	extern int     fb_mono_xoff;
 	extern int     fb_mono_yoff;
+	extern int     opt_solidfloor;
+	extern int     solidfloor_gray;
 
 	if (!menuactive) {
 	    /* Clear screens[0] view area: non-zero pixels are treated as HUD overlay
@@ -955,6 +957,41 @@ void R_RenderPlayerView (player_t* player)
 	    for (y = 0; y < viewheight; y++)
 		memset(screens[0] + (viewwindowy + y) * SCREENWIDTH + viewwindowx,
 		       0, scaledviewwidth);
+
+	    /* opt_solidfloor: R_DrawPlanes skips flat rendering entirely (including
+	     * R_DrawSpan_Mono which previously filled floor/ceiling with a solid grey).
+	     * Clear the 1-bit FB view area each frame so floor/ceiling stay clean white
+	     * (0x00 = white on Mac 1-bit) rather than showing stale FB content.
+	     * Cost: ~6 KB memset per frame — negligible vs the 33 ms saved by skipping
+	     * the full R_MakeSpans + R_DrawSpan_Mono plane rendering pass. */
+	    if (opt_solidfloor && fb_mono_base && scaledviewwidth > 0) {
+		/* Fill pattern table [gray_level][row_group], row_group=(fy>>1)&3.
+		 * Scanline-doubling pairs rows, so each group of 2 screen rows shares
+		 * one fill byte.  Level 3 (75%) cycles four rotations of 0xEE so the
+		 * two white pixels per byte shift one column left every 2 rows —
+		 * eliminating the vertical-stripe artifact of a constant fill byte.
+		 * All four 75% bytes have exactly 6 bits set → true 75% density.
+		 *   0xEE=11101110 white@col3,7   0xDD=11011101 white@col2,6
+		 *   0xBB=10111011 white@col1,5   0x77=01110111 white@col0,4 */
+		static const unsigned char sfill[5][4] = {
+		    {0x00,0x00,0x00,0x00},  /* 0: white          */
+		    {0x11,0x11,0x11,0x11},  /* 1: 25% light gray */
+		    {0xAA,0xAA,0xAA,0xAA},  /* 2: 50% mid gray   */
+		    {0xEE,0xDD,0xBB,0x77},  /* 3: 75% dithered   */
+		    {0xFF,0xFF,0xFF,0xFF},  /* 4: black          */
+		};
+		int glevel = solidfloor_gray;
+		int x_byte, n_bytes, fy;
+		if (glevel < 0) glevel = 0;
+		if (glevel > 4) glevel = 4;
+		x_byte  = (viewwindowx + fb_mono_xoff) >> 3;
+		n_bytes = scaledviewwidth >> 3;
+		for (fy = 0; fy < viewheight; fy++) {
+		    memset((unsigned char*)fb_mono_base
+			   + (viewwindowy + fy + fb_mono_yoff) * fb_mono_rowbytes
+			   + x_byte, sfill[glevel][(fy >> 1) & 3], n_bytes);
+		}
+	    }
 
 	    /* Half-line (#2): odd rows are NOT pre-cleared.  They retain the previous
 	     * frame's even-row data (temporal interlacing).  This eliminates the white

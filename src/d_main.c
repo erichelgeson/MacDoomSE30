@@ -108,6 +108,13 @@ boolean		singletics = false; // debug flag to cancel adaptiveness
 int opt_halfline      = 0;
 int opt_affine_texcol = 0;
 int opt_solidfloor    = 0;
+/* Gray fill level for solid floor/ceiling: 0=white 1=25% 2=50% 3=75% 4=black */
+int solidfloor_gray   = 0;
+/* Distance fog threshold (fixed_t scale units; 0=off).
+ * Wall/sprite columns with rw_scale/xscale < fog_scale are skipped —
+ * the solidfloor background shows through, creating a free fog effect.
+ * Step size is 2048 per keypress (` to raise, \ to lower). */
+int fog_scale         = 0;
 
 
 

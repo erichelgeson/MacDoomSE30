@@ -41,6 +41,8 @@ rcsid[] = "$Id: r_things.c,v 1.5 1997/02/03 16:47:56 b1 Exp $";
 
 #include "doomstat.h"
 
+extern int fog_scale;
+
 
 
 #define MINZ				(FRACUNIT*4)
@@ -493,10 +495,20 @@ void R_ProjectSprite (mobj_t* thing)
 	return;
     
     xscale = FixedDiv(projection, tz);
-	
-    gxt = -FixedMul(tr_x,viewsin); 
-    gyt = FixedMul(tr_y,viewcos); 
-    tx = -(gyt+gxt); 
+
+    /* Fog: cull decorative sprites beyond fog distance.
+     * Keep enemies (MF_COUNTKILL), pickups (MF_SPECIAL), projectiles (MF_MISSILE)
+     * so threats and items are always visible even in the fog.
+     * Decorations, corpses, torches etc. vanish with the walls. */
+    if (fog_scale > 0 && xscale < fog_scale)
+    {
+	if (!(thing->flags & (MF_COUNTKILL | MF_SPECIAL | MF_MISSILE)))
+	    return;
+    }
+
+    gxt = -FixedMul(tr_x,viewsin);
+    gyt = FixedMul(tr_y,viewcos);
+    tx = -(gyt+gxt);
 
     // too far off the side?
     if (abs(tx)>(tz<<2))

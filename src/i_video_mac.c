@@ -107,6 +107,12 @@ boolean hu_overlay_active = false;
  * after a non-direct frame (wipe/menu) that may have overwritten the fb.  */
 int border_needs_blit = 1;
 
+/* Double-buffering: all rendering writes to fb_offscreen_buf (via fb_mono_base).
+ * I_FinishUpdate copies the completed frame to real_fb_base (the actual screen)
+ * in one memcpy, preventing the mid-frame floor/ceiling fill from being visible. */
+static void          *real_fb_base     = NULL; /* actual screen memory (qd.screenBits.baseAddr) */
+static unsigned char *fb_offscreen_buf = NULL; /* off-screen rendering target */
+
 /* View geometry — from r_draw.c/r_main.c, used for selective blit */
 extern int viewwindowx;
 extern int viewwindowy;
@@ -127,6 +133,10 @@ int   dither_gwhite = 160;   /* game contrast: input white-point (0-255)     */
 /* no_lighting: when non-zero, all rendering uses the fullbright colormap.
  * Non-static so r_draw.c can read it each frame.                           */
 int   no_lighting   = 0;
+
+/* fog_scale: distance threshold (fixed_t units; 0=off) — defined in d_main.c,
+ * referenced here for save/load and runtime adjustment.                     */
+extern int fog_scale;
 
 /* Saved copy of the last palette Doom passed to I_SetPalette.
  * Needed to rebuild grayscale_pal when dither params change at runtime.   */
@@ -300,6 +310,8 @@ void I_LoadDitherConfig(void)
             dither_gwhite = (ival >= 0 && ival <= 255) ? ival : dither_gwhite;
         else if (strcmp(key, "no_lighting") == 0 && fscanf(f, "%d", &ival) == 1)
             no_lighting   = ival ? 1 : 0;
+        else if (strcmp(key, "fog_scale") == 0 && fscanf(f, "%d", &ival) == 1)
+            fog_scale     = (ival >= 0 && ival <= 65536) ? ival : fog_scale;
         else {
             /* unknown key — skip the rest of the line */
             int c; while ((c = fgetc(f)) != '\n' && c != '\r' && c != EOF) {}
@@ -327,8 +339,9 @@ void I_SaveDitherConfig(void)
     fprintf(f, "game_black %d\r", dither_gblack);
     fprintf(f, "game_white %d\r", dither_gwhite);
     fprintf(f, "no_lighting %d\r", no_lighting);
+    fprintf(f, "fog_scale %d\r", fog_scale);
     fclose(f);
-    doom_log("I_SaveDitherConfig: saved\r");
+    doom_log("I_SaveDitherConfig: saved (fog_scale=%d)\r", fog_scale);
 }
 
 /* Adjust a dither parameter at runtime (called from i_input_mac.c).
@@ -362,6 +375,12 @@ void I_AdjustDither(int param, int delta)
         case 4: /* save config */
             I_SaveDitherConfig();
             return;
+        case 5: /* fog_scale: step 2048, range 0-65536 (0=off) */
+            fog_scale += delta * 2048;
+            if (fog_scale < 0)      fog_scale = 0;
+            if (fog_scale > 65536)  fog_scale = 65536;
+            doom_log("fog: fog_scale=%d\r", fog_scale);
+            return;  /* no palette rebuild needed */
     }
     I_RebuildDitherPalette();
 }
@@ -374,10 +393,26 @@ void I_InitGraphics(void)
     fb_mono_xoff     = (screen->bounds.right  - screen->bounds.left  - SCREENWIDTH)  / 2;
     fb_mono_yoff     = (screen->bounds.bottom - screen->bounds.top   - SCREENHEIGHT) / 2;
 
-    doom_log("I_InitGraphics: %dx%d, rowBytes=%d, xoff=%d, yoff=%d\r",
-             screen->bounds.right  - screen->bounds.left,
-             screen->bounds.bottom - screen->bounds.top,
-             fb_mono_rowbytes, fb_mono_xoff, fb_mono_yoff);
+    {
+        int fb_height = screen->bounds.bottom - screen->bounds.top;
+        doom_log("I_InitGraphics: %dx%d, rowBytes=%d, xoff=%d, yoff=%d\r",
+                 screen->bounds.right - screen->bounds.left,
+                 fb_height, fb_mono_rowbytes, fb_mono_xoff, fb_mono_yoff);
+
+        /* Allocate off-screen buffer for double-buffering.
+         * All rendering (R_DrawColumn_Mono / R_DrawSpan_Mono / I_FinishUpdate blit)
+         * writes here via fb_mono_base.  At the end of each I_FinishUpdate the
+         * completed frame is memcpy'd to the real screen in one shot, so the user
+         * never sees a partially-rendered frame. */
+        fb_offscreen_buf = (unsigned char *)malloc((size_t)fb_mono_rowbytes * fb_height);
+        if (!fb_offscreen_buf)
+            I_Error("I_InitGraphics: failed to allocate off-screen buffer");
+        memset(fb_offscreen_buf, 0, (size_t)fb_mono_rowbytes * fb_height);
+        real_fb_base = fb_mono_base;     /* save real screen pointer */
+        fb_mono_base = fb_offscreen_buf; /* redirect all rendering to off-screen */
+        doom_log("I_InitGraphics: off-screen buffer %d bytes, real_fb=%p off_fb=%p\r",
+                 fb_mono_rowbytes * fb_height, real_fb_base, (void *)fb_mono_base);
+    }
 
     /* Load doom_dither.cfg if present, then build gamma curve.
      * I_SetPalette may have been called earlier in startup (before this
@@ -695,6 +730,16 @@ void I_FinishUpdate(void)
                                  + (y + yoff) * fb_mono_rowbytes) + (xoff >> 3);
             for (x = 0; x < SCREENWIDTH; x += 8) { *dst &= ~blit8_black(ovr + x); dst++; }
         }
+    }
+
+    /* Double-buffer flip: copy the completed off-screen frame to the real screen.
+     * Only copies the SCREENHEIGHT rows that Doom uses (rows yoff..yoff+199).
+     * 200 × 64 = 12,800 bytes — ~1.6ms at 16MHz, fully worth the flicker-free result.
+     * The user never sees a partially-rendered frame. */
+    if (real_fb_base) {
+        memcpy((unsigned char *)real_fb_base + yoff * fb_mono_rowbytes,
+               (unsigned char *)fb_mono_base + yoff * fb_mono_rowbytes,
+               (size_t)SCREENHEIGHT * fb_mono_rowbytes);
     }
 }
 
