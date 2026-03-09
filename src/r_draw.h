@@ -108,6 +108,9 @@ R_InitBuffer
 //  for player rendering etc.
 void	R_InitTranslationTables (void);
 
+// Initialize precomputed Bayer nibble tables for QUAD column renderer.
+void    R_InitQuadNibbleTables (void);
+
 
 
 // Rendering function.

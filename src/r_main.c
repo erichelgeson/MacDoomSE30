@@ -860,7 +860,9 @@ void R_Init (void)
     printf ("\nR_InitSkyMap");
     R_InitTranslationTables ();
     printf ("\nR_InitTranslationsTables");
-	
+    R_InitQuadNibbleTables ();
+    printf ("\nR_InitQuadNibbleTables");
+
     framecount = 0;
 }
 
