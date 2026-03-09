@@ -779,8 +779,7 @@ void I_FinishUpdate(void)
 
     /* Double-buffer flip: copy the completed off-screen frame to the real screen.
      * Only copies the SCREENHEIGHT rows that Doom uses (rows yoff..yoff+199).
-     * 200 × 64 = 12,800 bytes — ~1.6ms at 16MHz, fully worth the flicker-free result.
-     * The user never sees a partially-rendered frame. */
+     * 200 × 64 = 12,800 bytes. */
     if (real_fb_base) {
         memcpy((unsigned char *)real_fb_base + yoff * fb_mono_rowbytes,
                (unsigned char *)fb_mono_base + yoff * fb_mono_rowbytes,

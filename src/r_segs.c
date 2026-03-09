@@ -329,6 +329,12 @@ void R_RenderSegLoop (void)
     /* Hoist fog_scale>0 test out of inner loop (loop-invariant boolean). */
     int do_fog = (fog_scale > 0);
 
+    /* Lighting cache: walllights[index] only changes when the scale crosses a
+     * LIGHTSCALESHIFT (=12) boundary.  For parallel or distant walls many
+     * adjacent columns share the same index — skip the table lookup and
+     * dc_colormap write when unchanged. */
+    int last_light_index = -1;
+
     for ( ; rw_x < rw_stopx ; rw_x++)
     {
 	/* Fog: per-column scale check (only when fog is active). */
@@ -387,13 +393,16 @@ void R_RenderSegLoop (void)
 		angle_t a = (rw_centerangle + xtoviewangle[rw_x]) >> ANGLETOFINESHIFT;
 		texturecolumn = (rw_offset - FixedMul(finetangent[a], rw_distance)) >> FRACBITS;
 	    }
-	    // calculate lighting
+	    // calculate lighting — skip walllights lookup when index unchanged
 	    index = rw_scale>>LIGHTSCALESHIFT;
 
 	    if (index >=  MAXLIGHTSCALE )
 		index = MAXLIGHTSCALE-1;
 
-	    dc_colormap = walllights[index];
+	    if (index != last_light_index) {
+		last_light_index = index;
+		dc_colormap = walllights[index];
+	    }
 	    dc_x = rw_x;
 	    /* Linear interpolation replaces per-column 32-bit divide */
 	    dc_iscale = rw_iscale;

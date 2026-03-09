@@ -10,6 +10,31 @@ Newest entries at top. Add new entries here after each significant change.
 
 ---
 
+## 2026-03-09 — Colormap/Lighting Index Cache (r_segs.c)
+**Emulator: Snow**
+**Commit: (uncommitted)**
+
+Added `last_light_index` cache in `R_RenderSegLoop`: skip `dc_colormap = walllights[index]`
+reassignment when the lighting index hasn't changed from the previous column. `rw_scale` steps
+slowly across a seg, so adjacent columns often share the same `walllights[index]`. ~14–20 cycles
+saved per skipped column.
+
+| Metric | Previous (nibble table, Snow) | This build (Snow, extended run) |
+|--------|-------------------------------|----------------------------------|
+| FPS min | 4.1 | 3.6 |
+| FPS typical | 5.5–6.5 | 4.5–6.2 |
+| FPS peak | 7.1 | **7.6** (new high) |
+| cy/px range | 32–171 | **39–123** |
+| cy/px typical | 40–100 | 48–85 |
+| blit ticks | 7–22 | 7–28 |
+
+Extended 80+ frame Snow run confirms improvement. cy/px top end dropped 28% (171→123).
+Peak FPS 7.6 (new Snow high). Lower FPS floor (3.6) on heavy scenes with many sprites/segs.
+MOVEM.L blit tested and rejected same session (Basilisk II dirty-page issue, marginal savings).
+**Verdict: keep colormap skip.**
+
+---
+
 ## 2026-03-08 — QUAD Nibble Precomputed Table (r_draw.c)
 **Emulator: Snow**
 **Commit: (uncommitted, deployed build)**

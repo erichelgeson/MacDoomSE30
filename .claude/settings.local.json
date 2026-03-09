@@ -16,7 +16,8 @@
       "Bash(git init:*)",
       "Bash(wc:*)",
       "WebFetch(domain:doomwiki.org)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(m68k-apple-macos-gcc:*)"
     ]
   }
 }
