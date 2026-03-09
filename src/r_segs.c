@@ -92,6 +92,7 @@ extern int fog_scale;
 long prof_r_segs        = 0;
 long prof_r_seg_loop    = 0;
 long prof_r_segs_fogged = 0;
+long prof_r_scale       = 0;  /* time in R_ScaleFromGlobalAngle (2 calls/seg) */
 
 /* seg_all_fog: set in R_StoreWallRange when both scale endpoints are below fog_scale.
  * Signals R_RenderSegLoop to take the clip-only fast path (no texture, no colfunc). */
@@ -562,12 +563,16 @@ R_StoreWallRange
     rw_stopx = stop+1;
     
     // calculate scale at both ends and step
+    { long _sc = I_GetMacTick();
     ds_p->scale1 = rw_scale =
 	R_ScaleFromGlobalAngle (viewangle + xtoviewangle[start]);
+    prof_r_scale += I_GetMacTick() - _sc; }
 
     if (stop > start )
     {
+	{ long _sc = I_GetMacTick();
 	ds_p->scale2 = R_ScaleFromGlobalAngle (viewangle + xtoviewangle[stop]);
+	prof_r_scale += I_GetMacTick() - _sc; }
 	ds_p->scalestep = rw_scalestep =
 	    (ds_p->scale2 - rw_scale) / (stop-start);
     }

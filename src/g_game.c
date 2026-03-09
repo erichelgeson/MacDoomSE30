@@ -44,6 +44,8 @@ rcsid[] = "$Id: g_game.c,v 1.8 1997/02/03 22:45:09 b1 Exp $";
 
 #include "d_main.h"
 
+long prof_gticker_ptick = 0;  /* time spent in P_Ticker per reporting window */
+
 #include "wi_stuff.h"
 #include "hu_stuff.h"
 #include "st_stuff.h"
@@ -726,12 +728,12 @@ void G_Ticker (void)
     // do main actions
     switch (gamestate) 
     { 
-      case GS_LEVEL: 
-	P_Ticker (); 
-	ST_Ticker (); 
-	AM_Ticker (); 
-	HU_Ticker ();            
-	break; 
+      case GS_LEVEL:
+	{ long _pt = I_GetMacTick(); P_Ticker(); prof_gticker_ptick += I_GetMacTick() - _pt; }
+	ST_Ticker ();
+	AM_Ticker ();
+	HU_Ticker ();
+	break;
 	 
       case GS_INTERMISSION: 
 	WI_Ticker (); 

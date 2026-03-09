@@ -219,14 +219,19 @@ extern long prof_r_segs, prof_r_seg_loop;   /* r_segs.c: seg count + segloop tim
 extern long prof_r_segs_fogged;             /* r_segs.c: segs fully fog-culled (clip-only path) */
 extern long prof_r_bbox_fog;               /* r_bsp.c:  BSP subtrees pruned by fog distance */
 extern long prof_r_pixels;                   /* r_draw.c: total pixels drawn */
+extern long prof_r_scale;                    /* r_segs.c: time in R_ScaleFromGlobalAngle */
 extern long prof_palette_skips;              /* i_video_mac.c: I_SetPalette no-op calls */
 extern long prof_r_quad_calls;              /* r_draw.c: R_DrawColumnQuadLow_Mono calls */
+extern long prof_gticker_ptick;             /* g_game.c: time in P_Ticker */
 extern int  quad_dbg_done;                  /* r_draw.c: reset to re-arm debug log */
 static long prof_logic  = 0;
 static long prof_render = 0;
 static long prof_blit   = 0;
 static long prof_sound  = 0;
 static long prof_disp   = 0;
+static long prof_hud_st = 0;   /* ST_Drawer time */
+static long prof_hud_hu = 0;   /* HU_Drawer time */
+static long prof_hud_mn = 0;   /* M_Drawer time (menu active frames only) */
 
 void D_Display (void)
 {
@@ -287,7 +292,7 @@ void D_Display (void)
 	    redrawsbar = true;
 	if (inhelpscreensstate && !inhelpscreens)
 	    redrawsbar = true;              // just put away the help screen
-	ST_Drawer (viewheight == 200, redrawsbar );
+	{ long _st = I_GetMacTick(); ST_Drawer (viewheight == 200, redrawsbar); prof_hud_st += I_GetMacTick() - _st; }
 	fullscreen = viewheight == 200;
 	break;
 
@@ -320,7 +325,7 @@ void D_Display (void)
      * HU_Drawer (hu_stuff.c) sets it back to true if a message is visible. */
     { extern boolean hu_overlay_active; hu_overlay_active = false; }
     if (gamestate == GS_LEVEL && gametic)
-	HU_Drawer ();
+	{ long _hu = I_GetMacTick(); HU_Drawer(); prof_hud_hu += I_GetMacTick() - _hu; }
 
     // clean up border stuff
     if (gamestate != oldgamestate && gamestate != GS_LEVEL)
@@ -377,7 +382,7 @@ void D_Display (void)
 	byte *saved = screens[0];
 	memset(menu_overlay_buf, 0, SCREENWIDTH * SCREENHEIGHT);
 	screens[0] = menu_overlay_buf;
-	M_Drawer ();          // menu is drawn even on top of everything
+	{ long _mn = I_GetMacTick(); M_Drawer(); prof_hud_mn += I_GetMacTick() - _mn; }
 	screens[0] = saved;
     }
     NetUpdate ();         // send out any new accumulation
@@ -516,6 +521,7 @@ void D_DoomLoop (void)
 		     prof_logic, prof_render, prof_blit,
 		     prof_disp - prof_render - prof_blit,
 		     prof_sound);
+	    doom_log("  logic: ptick=%ld\r", prof_gticker_ptick);
 	    doom_log("  render: setup=%ld bsp=%ld planes=%ld masked=%ld\r",
 		     prof_r_setup, prof_r_bsp, prof_r_planes, prof_r_masked);
 	    { /* cy/px: approx column-renderer cycles per screen pixel (SE/30 = 16MHz/60Hz).
@@ -523,12 +529,14 @@ void D_DoomLoop (void)
 	      long cy_px = prof_r_pixels > 0
 		  ? (long)((long long)prof_r_seg_loop * 266667LL / prof_r_pixels)
 		  : 0;
-	      doom_log("    bsp: segs=%ld segloop=%ld trav=%ld px=%ld cy/px=%ld fog_seg=%ld bbox=%ld\r",
+	      doom_log("    bsp: segs=%ld segloop=%ld trav=%ld px=%ld cy/px=%ld fog_seg=%ld bbox=%ld scale=%ld\r",
 		       prof_r_segs, prof_r_seg_loop,
 		       prof_r_bsp - prof_r_seg_loop,
 		       prof_r_pixels, cy_px,
-		       prof_r_segs_fogged, prof_r_bbox_fog);
+		       prof_r_segs_fogged, prof_r_bbox_fog, prof_r_scale);
 	    }
+	    doom_log("  hud: st=%ld hu=%ld menu=%ld\r",
+		     prof_hud_st, prof_hud_hu, prof_hud_mn);
 	    doom_log("  pal_skips=%ld quad_calls=%ld\r",
 		     prof_palette_skips, prof_r_quad_calls);
 	    doom_log_flush();  /* force HFS commit so data survives a crash */
@@ -550,8 +558,13 @@ void D_DoomLoop (void)
 	    prof_r_segs_fogged = 0;
 	    prof_r_bbox_fog    = 0;
 	    prof_r_pixels      = 0;
+	    prof_r_scale       = 0;
 	    prof_palette_skips = 0;
 	    prof_r_quad_calls  = 0;
+	    prof_gticker_ptick = 0;
+	    prof_hud_st        = 0;
+	    prof_hud_hu        = 0;
+	    prof_hud_mn        = 0;
 	    quad_dbg_done       = 0;   /* re-arm first-call debug next window */
 	}
     }

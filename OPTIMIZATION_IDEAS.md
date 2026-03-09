@@ -18,22 +18,36 @@ confirmed, or ruled out. Mark status with: `[ ]` untried, `[x]` done, `[-]` trie
   issue). Snow showed HUD fine but savings marginal (~1–2 ticks on 7–28 total).
   Rejected 2026-03-09.
 
-- [ ] **Profile `logic` cost** — `P_Ticker` sometimes hits 20–25 ticks. Sector specials,
-  moving floors, and line actions all run every game tic regardless of rendering load.
-  Add a profiling split to identify the hotspot.
+- [ ] **Optimize P_Ticker** — Profiled 2026-03-09: `ptick` = 98–100% of `logic` in every
+  frame. G_Ticker overhead (input, M/AM/HU_Ticker) is only 1–2 ticks — P_Ticker is the
+  entire logic cost. Typical ptick: 7–21 ticks/window, max 23. At render-light scenes
+  (fast FPS), logic can be 50–80% of render cost — actionable. Next step: sub-profile
+  inside P_Ticker to identify whether AI think (P_MobjThinker), movement (P_XYMovement),
+  or sector specials (P_UpdateSpecials) dominate. Candidate: add per-category timers to
+  `p_tick.c` / `p_map.c`.
 
 ---
 
 ## Medium Impact
 
-- [ ] **R_ScaleFromGlobalAngle — reduce FixedDiv calls** — Called twice per seg
-  (start + end scale). Each call contains a FixedDiv (~50 cycles). 36 segs/frame =
-  72 divisions just for wall scale. Could approximate the end scale from the start
-  or cache recent results.
+- [ ] **R_ScaleFromGlobalAngle — reduce FixedDiv calls** — Profiled 2026-03-09: `scale`
+  counter shows this is **25–50% of BSP traversal cost** (= bsp - segloop), and 5–25% of
+  total render. Typical: 2–10 ticks/window, max 13 (at 248 segs). With ~150 segs typical,
+  saving the second call (scale2 when stop>start) could cut it by ~half. Options:
+  1. Approximate scale2 from scale1 via linear step (scale2 ≈ scale1 + N*scalestep, but
+     scalestep isn't known yet at this point — chicken-and-egg).
+  2. One FixedDiv + one FixedMul approximation for the second endpoint.
+  3. Precompute or cache scale for repeated angles.
+  Likely worth attempting; moderate complexity.
 
-- [ ] **HUD rendering cost** — Spikes 60–120 ticks during menu transitions, 4–16 ticks
-  during gameplay. Menu responsiveness TODO likely tied to this. Profile and reduce
-  redundant redraws.
+- [ ] **HUD rendering cost** — Profiled 2026-03-09: `st` (ST_Drawer) = 2–9 ticks/window
+  typical 3–6, runs every gameplay frame. `hu` (HU_Drawer) = 0–5, usually 0–2, spikes
+  with active messages. Together account for 60–90% of `hud` budget. Unaccounted 2–5
+  ticks = border draws + NetUpdate overhead. ST_Drawer at 3–6 ticks/window is small vs
+  render (30–65) but non-negligible at fast-scene frame rates. Main candidate: add dirty
+  flags to skip ST_Drawer redraw when nothing changed (health/ammo/keys/face unchanged).
+  ST_Ticker already tracks some dirty state but ST_Drawer may not fully skip on no-change.
+  Menu M_Drawer cost is low (2 ticks/frame when open — not the bottleneck).
 
 - [ ] **R_CheckBBox tighter angle rejection** — Currently does full clip array scan per
   BSP node. Could add a screen-space angle rejection early-out for nodes clearly
