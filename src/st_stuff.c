@@ -390,7 +390,18 @@ static int	st_faceindex = 0;
 static int	keyboxes[3]; 
 
 // a random number per tick
-static int	st_randomnumber;  
+static int	st_randomnumber;
+
+/* Dirty-skip snapshots: last values drawn to the status bar.
+   Initialized to -999 in ST_initData() to force first draw. */
+static int stsnap_health;
+static int stsnap_armor;
+static int stsnap_ammo[4];
+static int stsnap_maxammo[4];
+static int stsnap_weapon;
+static int stsnap_face;
+static int stsnap_cards;    /* plyr->cards[0..5] packed into low 6 bits */
+static int stsnap_weapons;  /* plyr->weaponowned[1..6] packed into low 6 bits */
 
 
 
@@ -1107,7 +1118,8 @@ void ST_diffDraw(void)
 
 void ST_Drawer (boolean fullscreen, boolean refresh)
 {
-  
+    int cur_cards, cur_weapons;
+
     st_statusbaron = (!fullscreen) || automapactive;
     st_firsttime = st_firsttime || refresh;
 
@@ -1115,9 +1127,62 @@ void ST_Drawer (boolean fullscreen, boolean refresh)
     ST_doPaletteStuff();
 
     // If just after ST_Start(), refresh all
-    if (st_firsttime) ST_doRefresh();
-    // Otherwise, update as little as possible
-    else ST_diffDraw();
+    if (st_firsttime)
+    {
+	ST_doRefresh();
+	/* Update snapshots to match what was just fully drawn */
+	stsnap_health  = plyr->health;
+	stsnap_armor   = plyr->armorpoints;
+	stsnap_ammo[0] = plyr->ammo[0]; stsnap_ammo[1] = plyr->ammo[1];
+	stsnap_ammo[2] = plyr->ammo[2]; stsnap_ammo[3] = plyr->ammo[3];
+	stsnap_maxammo[0] = plyr->maxammo[0]; stsnap_maxammo[1] = plyr->maxammo[1];
+	stsnap_maxammo[2] = plyr->maxammo[2]; stsnap_maxammo[3] = plyr->maxammo[3];
+	stsnap_weapon  = plyr->readyweapon;
+	stsnap_face    = st_faceindex;
+	stsnap_cards   = plyr->cards[0]|(plyr->cards[1]<<1)|(plyr->cards[2]<<2)|
+			 (plyr->cards[3]<<3)|(plyr->cards[4]<<4)|(plyr->cards[5]<<5);
+	stsnap_weapons = plyr->weaponowned[1]|(plyr->weaponowned[2]<<1)|(plyr->weaponowned[3]<<2)|
+			 (plyr->weaponowned[4]<<3)|(plyr->weaponowned[5]<<4)|(plyr->weaponowned[6]<<5);
+    }
+    else
+    {
+	/* Skip redraw if nothing visible has changed since last draw */
+	cur_cards   = plyr->cards[0]|(plyr->cards[1]<<1)|(plyr->cards[2]<<2)|
+		      (plyr->cards[3]<<3)|(plyr->cards[4]<<4)|(plyr->cards[5]<<5);
+	cur_weapons = plyr->weaponowned[1]|(plyr->weaponowned[2]<<1)|(plyr->weaponowned[3]<<2)|
+		      (plyr->weaponowned[4]<<3)|(plyr->weaponowned[5]<<4)|(plyr->weaponowned[6]<<5);
+
+	if (plyr->health      == stsnap_health      &&
+	    plyr->armorpoints == stsnap_armor        &&
+	    plyr->ammo[0]     == stsnap_ammo[0]      &&
+	    plyr->ammo[1]     == stsnap_ammo[1]      &&
+	    plyr->ammo[2]     == stsnap_ammo[2]      &&
+	    plyr->ammo[3]     == stsnap_ammo[3]      &&
+	    plyr->maxammo[0]  == stsnap_maxammo[0]   &&
+	    plyr->maxammo[1]  == stsnap_maxammo[1]   &&
+	    plyr->maxammo[2]  == stsnap_maxammo[2]   &&
+	    plyr->maxammo[3]  == stsnap_maxammo[3]   &&
+	    plyr->readyweapon == stsnap_weapon       &&
+	    st_faceindex      == stsnap_face         &&
+	    cur_cards         == stsnap_cards        &&
+	    cur_weapons       == stsnap_weapons)
+	{
+	    return; /* status bar unchanged — skip redraw */
+	}
+
+	ST_diffDraw();
+
+	stsnap_health  = plyr->health;
+	stsnap_armor   = plyr->armorpoints;
+	stsnap_ammo[0] = plyr->ammo[0]; stsnap_ammo[1] = plyr->ammo[1];
+	stsnap_ammo[2] = plyr->ammo[2]; stsnap_ammo[3] = plyr->ammo[3];
+	stsnap_maxammo[0] = plyr->maxammo[0]; stsnap_maxammo[1] = plyr->maxammo[1];
+	stsnap_maxammo[2] = plyr->maxammo[2]; stsnap_maxammo[3] = plyr->maxammo[3];
+	stsnap_weapon  = plyr->readyweapon;
+	stsnap_face    = st_faceindex;
+	stsnap_cards   = cur_cards;
+	stsnap_weapons = cur_weapons;
+    }
 
 }
 
@@ -1272,6 +1337,12 @@ void ST_initData(void)
 
     for (i=0;i<3;i++)
 	keyboxes[i] = -1;
+
+    /* force status bar redraw on next frame */
+    stsnap_health = stsnap_armor = stsnap_weapon = stsnap_face =
+	stsnap_cards = stsnap_weapons = -999;
+    stsnap_ammo[0] = stsnap_ammo[1] = stsnap_ammo[2] = stsnap_ammo[3] = -999;
+    stsnap_maxammo[0] = stsnap_maxammo[1] = stsnap_maxammo[2] = stsnap_maxammo[3] = -999;
 
     STlib_init();
 

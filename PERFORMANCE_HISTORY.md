@@ -10,6 +10,31 @@ Newest entries at top. Add new entries here after each significant change.
 
 ---
 
+## 2026-03-10 — ST_Drawer Dirty-Skip (st_stuff.c)
+**Emulator: Snow**
+**Commit: (uncommitted)**
+
+Added high-level snapshot in `ST_Drawer`: snapshots health, armorpoints, ammo[4],
+maxammo[4], readyweapon, st_faceindex, cards bitmask, weaponowned bitmask. When all
+match last-drawn values, skip `ST_drawWidgets` entirely. Core insight: `STlib_drawNum`
+has no dirty tracking — all number widgets (health, armor, ammo ×8) were unconditionally
+redrawn every frame even without changes. Snapshots reset in `ST_initData()` and updated
+after `ST_doRefresh()`.
+
+| Metric | Previous (scale inline) | This build |
+|--------|-------------------------|------------|
+| FPS peak | 8.4 | **9.3** (new all-time Snow record) |
+| FPS typical | 4.5–6.5 | 4.5–7.5 (more 7+ frames) |
+| st ticks/window typical | 3–6 | **0–2** |
+| st=0 frames | ~0% | ~11% |
+| st=3-6 frames | ~100% | ~28% (damage/combat only) |
+
+Dirty skip fires on quiet/exploration frames. Still fires on combat frames due to face
+index changing every ~17 tics + health/ammo changes during combat. Correct behavior.
+**Verdict: keep.**
+
+---
+
 ## 2026-03-10 — R_ScaleFromGlobalAngle Inline + Short-Seg Skip (r_segs.c, r_main.c)
 **Emulator: Snow**
 **Commit: (uncommitted)**

@@ -35,14 +35,10 @@ confirmed, or ruled out. Mark status with: `[ ]` untried, `[x]` done, `[-]` trie
   Result: scale cost -40% on high-seg frames, 20–41% skip rate, FPS peak 8.4 (new Snow
   record). `prof_r_scale_skip` counter tracks hits.
 
-- [ ] **HUD rendering cost** — Profiled 2026-03-09: `st` (ST_Drawer) = 2–9 ticks/window
-  typical 3–6, runs every gameplay frame. `hu` (HU_Drawer) = 0–5, usually 0–2, spikes
-  with active messages. Together account for 60–90% of `hud` budget. Unaccounted 2–5
-  ticks = border draws + NetUpdate overhead. ST_Drawer at 3–6 ticks/window is small vs
-  render (30–65) but non-negligible at fast-scene frame rates. Main candidate: add dirty
-  flags to skip ST_Drawer redraw when nothing changed (health/ammo/keys/face unchanged).
-  ST_Ticker already tracks some dirty state but ST_Drawer may not fully skip on no-change.
-  Menu M_Drawer cost is low (2 ticks/frame when open — not the bottleneck).
+- [x] **HUD rendering cost / ST_Drawer dirty-skip** — **Done 2026-03-10.** Snapshot-based
+  skip in `ST_Drawer`: 13 fields compared; skip `ST_drawWidgets` entirely when unchanged.
+  Result: st typical 3–6 → 0–2, FPS peak 9.3 (new Snow record). Still fires on combat
+  frames (face changes every ~17 tics, health/ammo changes during damage). Correct behavior.
 
 - [ ] **R_CheckBBox tighter angle rejection** — Currently does full clip array scan per
   BSP node. Could add a screen-space angle rejection early-out for nodes clearly
