@@ -502,7 +502,11 @@ void R_ProjectSprite (mobj_t* thing)
      * Decorations, corpses, torches etc. vanish with the walls. */
     if (fog_scale > 0 && (xscale << detailshift) < fog_scale)
     {
-	if (!(thing->flags & (MF_COUNTKILL | MF_SPECIAL | MF_MISSILE)))
+	/* Keep enemies, pickups, projectiles, and explosion sprites (missiles
+	 * that have fired -- info->flags retains MF_MISSILE even after
+	 * P_ExplodeMissile clears it from the live flags). */
+	if (!(thing->flags & (MF_COUNTKILL | MF_SPECIAL | MF_MISSILE)) &&
+	    !(thing->info->flags & MF_MISSILE))
 	    return;
     }
 
