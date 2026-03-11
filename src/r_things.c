@@ -500,7 +500,7 @@ void R_ProjectSprite (mobj_t* thing)
      * Keep enemies (MF_COUNTKILL), pickups (MF_SPECIAL), projectiles (MF_MISSILE)
      * so threats and items are always visible even in the fog.
      * Decorations, corpses, torches etc. vanish with the walls. */
-    if (fog_scale > 0 && xscale < fog_scale)
+    if (fog_scale > 0 && (xscale << detailshift) < fog_scale)
     {
 	if (!(thing->flags & (MF_COUNTKILL | MF_SPECIAL | MF_MISSILE)))
 	    return;

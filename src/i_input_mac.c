@@ -182,9 +182,6 @@ void I_PollMacInput(void)
             doom_evt.type  = ev_keydown;
             doom_evt.data1 = kKeyTable[i].doomKey;
             D_PostEvent(&doom_evt);
-            if (kKeyTable[i].doomKey >= 'a' && kKeyTable[i].doomKey <= 'z')
-                doom_log("KEY: mac=0x%02x doom='%c'(0x%02x)\r",
-                         kKeyTable[i].macKey, kKeyTable[i].doomKey, kKeyTable[i].doomKey);
         } else if (!is_down && was_down) {
             doom_evt.type  = ev_keyup;
             doom_evt.data1 = kKeyTable[i].doomKey;
