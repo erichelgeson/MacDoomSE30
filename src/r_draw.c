@@ -1652,6 +1652,29 @@ void R_InitQuadNibbleTables(void)
     }
 }
 
+/* Precomputed Bayer dither byte table for R_DrawColumnMushLow_Mono.
+ * Each logical column is 8 screen pixels wide = exactly 1 byte.
+ * mush_byte[row][gray] = quad_nibble_hi[row][gray] | quad_nibble_lo[row][gray]
+ *   i.e. the same 4-bit Bayer pattern replicated in both nibbles → full byte.
+ * Initialized by R_InitMushByteTables() called from R_Init(). */
+static byte mush_byte[4][256];
+
+void R_InitMushByteTables(void)
+{
+    int row, g;
+    for (row = 0; row < 4; row++) {
+        const byte *br = bayer4x4[row];
+        for (g = 0; g < 256; g++) {
+            unsigned int n =
+                ((unsigned int)g < (unsigned int)br[0]) << 3 |
+                ((unsigned int)g < (unsigned int)br[1]) << 2 |
+                ((unsigned int)g < (unsigned int)br[2]) << 1 |
+                ((unsigned int)g < (unsigned int)br[3]);
+            mush_byte[row][g] = (byte)(n | (n << 4));
+        }
+    }
+}
+
 /* Instrumentation for QuadLow renderer.
  * prof_r_quad_calls: total calls per FPS window (reset by d_main.c).
  * quad_dbg_done: set after first debug log; reset by d_main.c via extern. */
@@ -1890,4 +1913,141 @@ void R_DrawSpanQuadLow_Mono(void)
         half_x++;
     } while (count--);
 #undef QUAD_NIBBLE
+}
+
+
+/*
+ * R_DrawColumnMushLow_Mono
+ * Ultra-ultra-low-detail (detailshift=3) wall column renderer → direct 1-bit framebuffer.
+ * Each logical column is 8 screen pixels wide = exactly 1 byte.
+ *
+ * No nibble RMW: byte_idx is always byte-aligned, so we write the full byte
+ * directly.  mush_byte[row][gray] contains the 4-bit Bayer pattern in both
+ * the high and low nibble, giving a consistent 8-pixel-wide dither block.
+ */
+void R_DrawColumnMushLow_Mono(void)
+{
+    int             count;
+    fixed_t         frac, fracstep;
+    int             bayer_y;
+    int             byte_idx;
+    unsigned char  *dst;
+    const byte     *mono_cm;
+
+    count = dc_yh - dc_yl;
+    if (count < 0) return;
+
+    /* fb_x for mush = dc_x * 8 + viewwindowx + fb_mono_xoff.
+     * Since viewwindowx ≡ 0 mod 8 (MUSH aligned), byte_idx is constant. */
+    byte_idx = dc_x + (viewwindowx + fb_mono_xoff) / 8;
+
+    mono_cm  = dc_colormap;
+    bayer_y  = (dc_yl + viewwindowy) & 3;
+
+    if (opt_halfline) {
+        int start_y = dc_yl;
+        int nrows;
+        unsigned int gray;
+
+        if ((start_y + viewwindowy) & 1) { start_y++; count--; }
+        if (count < 0) return;
+
+        bayer_y  = ((start_y + viewwindowy) >> 1) & 3;
+        fracstep = dc_iscale << 1;
+        frac     = dc_texturemid + (start_y - centery) * dc_iscale;
+
+        dst  = (unsigned char *)fb_mono_base
+               + (start_y + viewwindowy + fb_mono_yoff) * fb_mono_rowbytes
+               + byte_idx;
+        nrows = (count >> 1) + 1;
+
+        while (nrows >= 2) {
+            COLMONO_GRAY(frac, dc_source, mono_cm, gray);
+            *dst = mush_byte[bayer_y][gray];
+            dst += fb_mono_rowbytes << 1;
+            bayer_y = (bayer_y + 1) & 3;
+            frac += fracstep;
+
+            COLMONO_GRAY(frac, dc_source, mono_cm, gray);
+            *dst = mush_byte[bayer_y][gray];
+            dst += fb_mono_rowbytes << 1;
+            bayer_y = (bayer_y + 1) & 3;
+            frac += fracstep;
+
+            nrows -= 2;
+        }
+        if (nrows) {
+            COLMONO_GRAY(frac, dc_source, mono_cm, gray);
+            *dst = mush_byte[bayer_y][gray];
+        }
+    } else {
+        fracstep = dc_iscale;
+        frac     = dc_texturemid + (dc_yl - centery) * dc_iscale;
+
+        dst  = (unsigned char *)fb_mono_base
+               + (dc_yl + viewwindowy + fb_mono_yoff) * fb_mono_rowbytes
+               + byte_idx;
+
+        do {
+            unsigned int gray;
+            COLMONO_GRAY(frac, dc_source, mono_cm, gray);
+            *dst = mush_byte[bayer_y][gray];
+            dst += fb_mono_rowbytes;
+            bayer_y = (bayer_y + 1) & 3;
+            frac += fracstep;
+        } while (count--);
+    }
+}
+
+
+/*
+ * R_DrawSpanMushLow_Mono
+ * Span renderer for MUSH detail (detailshift=3).
+ * Each span pixel maps to 8 physical pixels = 1 byte.
+ * With opt_solidfloor: fill entire span row with mush_byte pattern.
+ */
+void R_DrawSpanMushLow_Mono(void)
+{
+    int           count;
+    fixed_t       xfrac, yfrac;
+    int           half_x;
+    unsigned char *dst_row;
+    int           bayer_y;
+    int           fb_x_base;
+    const byte   *mono_cm;
+
+    /* byte row in framebuffer for this span */
+    fb_x_base = (ds_x1 << 3) + viewwindowx + fb_mono_xoff;  /* leftmost physical pixel */
+    bayer_y   = (ds_y + viewwindowy) & 3;
+    dst_row   = (unsigned char *)fb_mono_base
+                + (ds_y + viewwindowy + fb_mono_yoff) * fb_mono_rowbytes;
+    mono_cm   = ds_colormap;
+
+    if (opt_solidfloor) {
+        /* solid fill: compute gray from colormap index 0, write uniform pattern */
+        unsigned int gray = mono_cm[0];
+        unsigned char fill = mush_byte[bayer_y][gray];
+        int b1 = fb_x_base >> 3;
+        int b2 = ((ds_x2 << 3) + viewwindowx + fb_mono_xoff + 7) >> 3;
+        if (b2 > b1)
+            memset(dst_row + b1, fill, (size_t)(b2 - b1));
+        return;
+    }
+
+    xfrac  = ds_xfrac;
+    yfrac  = ds_yfrac;
+    count  = ds_x2 - ds_x1;
+    half_x = ds_x1;
+
+    do {
+        int           spot  = (((unsigned int)yfrac >> (16-6)) & (63*64))
+                            + (((unsigned int)xfrac >> 16) & 63);
+        unsigned int  gray  = mono_cm[ds_source[spot]];
+        int           b     = (half_x << 3) / 8 + (viewwindowx + fb_mono_xoff) / 8;
+        dst_row[b] = mush_byte[bayer_y][gray];
+
+        xfrac  += ds_xstep;
+        yfrac  += ds_ystep;
+        half_x++;
+    } while (count--);
 }

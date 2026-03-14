@@ -1132,13 +1132,13 @@ void M_ChangeSensitivity(int choice)
 
 void M_ChangeDetail(int choice)
 {
-    static const char *detailMsgs[3] = { "HIGH DETAIL", "LOW DETAIL", "QUAD DETAIL" };
+    static const char *detailMsgs[4] = { "HIGH DETAIL", "LOW DETAIL", "QUAD DETAIL", "MUSH DETAIL" };
     choice = 0;
-    detailLevel = (detailLevel + 1) % 3;   /* cycle: HIGH(0) → LOW(1) → QUAD(2) → HIGH */
+    detailLevel = (detailLevel + 1) % 4;   /* cycle: HIGH(0) → LOW(1) → QUAD(2) → MUSH(3) → HIGH */
     R_SetViewSize (screenblocks, detailLevel);
     players[consoleplayer].message = detailMsgs[detailLevel];
     doom_log("M_ChangeDetail: detailLevel=%d\r", detailLevel);
-    I_MacBeep (detailLevel + 1);            /* 1 beep=HIGH, 2=LOW, 3=QUAD */
+    I_MacBeep (detailLevel + 1);            /* 1=HIGH, 2=LOW, 3=QUAD, 4=MUSH */
 }
 
 

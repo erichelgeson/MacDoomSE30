@@ -15,6 +15,9 @@
 ## Stability / Exit
 - [ ] **Monitor for CHK errors on exit** (Basilisk II) — observed once after black background window work. longjmp/ExitToShell architecture seems correct; if it recurs investigate QuickDraw teardown order.
 
+## Detail Levels
+- [x] ~~MUSH mode (detailLevel=3, 8px cols, 28 cols)~~ — Implemented 2026-03-14. Measured ~7.3 FPS mean (4.6–12.1 range) vs QUAD ~6–7 FPS mean; gain is ~1 FPS. Visually unusable — 28 columns is below the scene-recognition threshold and the 8px block pattern is incoherent. Code retained (m_menu.c cycles 0→1→2→3, r_draw.c has R_DrawColumnMushLow_Mono / R_DrawSpanMushLow_Mono, mush_byte LUT). Not recommended for play; avoid setting detailLevel=3 in doom.cfg.
+
 ## Bugs
 - [ ] **Invisibility powerup weapon misrender** — when player has invisibility, weapon sprite renders skewed and displaced to the left. All weapons affected. Old bug, not introduced recently. Fuzz path (`R_DrawFuzzColumn_Mono`) suspected.
 - [x] ~~Sprites (barrels, non-enemy) culled much closer than fog distance~~ — Fixed 2026-03-13: QUAD mode rw_scale is <<detailshift vs raw xscale; fog comparison now uses (xscale << detailshift)

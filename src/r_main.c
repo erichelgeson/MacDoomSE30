@@ -694,13 +694,21 @@ void R_ExecuteSetViewSize (void)
 	    transcolfunc = R_DrawTranslatedColumn_Mono;
 	    spanfunc     = R_DrawSpanLow_Mono;
 	}
-	else
+	else if (detailshift == 2)
 	{
 	    /* detailshift=2: 4px-wide columns/spans, ~4× fewer pixels to render */
 	    colfunc    = basecolfunc = R_DrawColumnQuadLow_Mono;
 	    fuzzcolfunc  = R_DrawFuzzColumn_Mono;
 	    transcolfunc = R_DrawTranslatedColumn_Mono;
 	    spanfunc     = R_DrawSpanQuadLow_Mono;
+	}
+	else
+	{
+	    /* detailshift=3: 8px-wide columns/spans (MUSH), ~8× fewer pixels to render */
+	    colfunc    = basecolfunc = R_DrawColumnMushLow_Mono;
+	    fuzzcolfunc  = R_DrawFuzzColumn_Mono;
+	    transcolfunc = R_DrawTranslatedColumn_Mono;
+	    spanfunc     = R_DrawSpanMushLow_Mono;
 	}
     }
 
@@ -808,6 +816,8 @@ void R_Init (void)
     printf ("\nR_InitTranslationsTables");
     R_InitQuadNibbleTables ();
     printf ("\nR_InitQuadNibbleTables");
+    R_InitMushByteTables ();
+    printf ("\nR_InitMushByteTables");
 
     framecount = 0;
 }

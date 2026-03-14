@@ -31,40 +31,44 @@ extern jmp_buf doom_quit_jmp;
  * pixels into the console area and creating ghost images.
  * All diagnostic output is in doom_log.txt; open it after each run.
  */
-static FILE *g_logfile = NULL;
+/* Log file opened via direct HFS calls (bypasses newlib fopen/WD ambiguity).
+ * g_log_refnum: HFS file reference number (-1 = not open).
+ * g_log_vrefnum: volume reference number of the log file's volume (for FlushVol). */
+static short g_log_refnum  = -1;
+static short g_log_vrefnum =  0;
 
 #ifndef DOOM_RELEASE_BUILD
 
 void doom_log(const char *fmt, ...)
 {
     char buf[1024];
+    char out[1024];
     va_list ap;
     const char *p;
+    char *q;
+    long len;
+
+    if (g_log_refnum < 0) return;
 
     va_start(ap, fmt);
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
 
-    if (g_logfile) {
-        /* Classic Mac OS text files use \r (0x0D) line endings.
-         * SimpleText and TeachText will show \n (0x0A) as a square,
-         * so translate here rather than changing every call site. */
-        for (p = buf; *p; p++)
-            fputc(*p == '\n' ? '\r' : *p, g_logfile);
-        fflush(g_logfile);
-    }
+    /* Classic Mac OS text files use \r; translate \n here. */
+    for (p = buf, q = out; *p && q < out + sizeof(out) - 1; p++, q++)
+        *q = (*p == '\n') ? '\r' : *p;
+    len = q - out;
+    if (len > 0)
+        FSWrite(g_log_refnum, &len, out);  /* FSWrite goes straight to HFS */
 }
 
-/* Force HFS to commit its sector cache to the underlying volume.
- * fflush() only flushes the stdio buffer into the HFS layer; if the
- * process crashes without a clean exit the HFS dirty cache is lost.
- * Call this after any log block whose loss would be unacceptable
- * (e.g., the 35-tic FPS window in D_DoomLoop). */
+/* Commit HFS sector cache to the underlying volume.
+ * FSWrite goes to HFS but HFS may buffer; FlushVol forces it to disk/ExtFS.
+ * Call after any log block whose loss would be unacceptable. */
 void doom_log_flush(void)
 {
-    if (g_logfile)
-        fflush(g_logfile);
-    FlushVol(NULL, 0);   /* flush default HFS volume → commits to ExtFS */
+    if (g_log_refnum >= 0)
+        FlushVol(NULL, g_log_vrefnum);
 }
 
 #endif /* !DOOM_RELEASE_BUILD */
@@ -84,24 +88,59 @@ void I_MacBeep(int n)
 void I_OpenLog(void)
 {
 #ifndef DOOM_RELEASE_BUILD
-    g_logfile = fopen("doom_log.txt", "w");
-    if (g_logfile) {
-        /* Mark the file as Mac TEXT so SimpleText can open it */
-        {
-            unsigned char pname[14];  /* Pascal string */
-            FInfo fi;
-            pname[0] = 12;  /* length of "doom_log.txt" */
-            pname[1]='d'; pname[2]='o'; pname[3]='o'; pname[4]='m';
-            pname[5]='_'; pname[6]='l'; pname[7]='o'; pname[8]='g';
-            pname[9]='.'; pname[10]='t'; pname[11]='x'; pname[12]='t';
-            if (GetFInfo(pname, 0, &fi) == noErr) {
-                fi.fdType    = 'TEXT';
-                fi.fdCreator = 'ttxt';  /* SimpleText */
-                SetFInfo(pname, 0, &fi);
-            }
-        }
-        doom_log("=== Doom SE/30 log opened ===\n");
+    /* Use GetProcessInformation to get the app's FSSpec, then open the log
+     * file in the same folder using explicit HFS calls.  This avoids the
+     * PBHSetVol/WD ambiguity that causes fopen("doom_log.txt","w") to
+     * silently fail when the default working directory isn't set correctly. */
+    ProcessSerialNumber psn;
+    ProcessInfoRec      info;
+    FSSpec              appSpec, logSpec;
+    OSErr               err;
+    /* Pascal string for the log filename */
+    static const unsigned char kLogName[14] = {
+        12, 'd','o','o','m','_','l','o','g','.','t','x','t'
+    };
+
+    psn.highLongOfPSN = 0;
+    psn.lowLongOfPSN  = kCurrentProcess;
+    info.processInfoLength = sizeof(ProcessInfoRec);
+    info.processName       = NULL;
+    info.processAppSpec    = &appSpec;
+
+    if (GetProcessInformation(&psn, &info) != noErr) {
+        printf("I_OpenLog: GetProcessInformation failed\n");
+        return;
     }
+
+    err = FSMakeFSSpec(appSpec.vRefNum, appSpec.parID, kLogName, &logSpec);
+    if (err != noErr && err != fnfErr) {
+        printf("I_OpenLog: FSMakeFSSpec err=%d\n", (int)err);
+        return;
+    }
+
+    /* Create the file (type TEXT, creator ttxt=SimpleText).
+     * Ignore dupFNErr — file exists from a previous run; we'll truncate it. */
+    err = FSpCreate(&logSpec, 'ttxt', 'TEXT', 0 /* smRoman */);
+    if (err != noErr && err != dupFNErr) {
+        printf("I_OpenLog: FSpCreate err=%d vRef=%d parID=%ld\n",
+               (int)err, (int)appSpec.vRefNum, (long)appSpec.parID);
+        return;
+    }
+
+    err = FSpOpenDF(&logSpec, fsWrPerm, &g_log_refnum);
+    if (err != noErr) {
+        printf("I_OpenLog: FSpOpenDF err=%d vRef=%d parID=%ld\n",
+               (int)err, (int)appSpec.vRefNum, (long)appSpec.parID);
+        g_log_refnum = -1;
+        return;
+    }
+
+    /* Truncate to zero so this run's log starts fresh */
+    SetEOF(g_log_refnum, 0);
+    SetFPos(g_log_refnum, fsFromStart, 0);
+
+    g_log_vrefnum = logSpec.vRefNum;
+    doom_log("=== Doom SE/30 log opened ===\n");
 #endif
 }
 
@@ -234,7 +273,11 @@ void I_Quit(void)
     doom_log_flush();
     M_SaveDefaults();
     doom_log("I_Quit: M_SaveDefaults done — returning to main\n");
-    if (g_logfile) { fclose(g_logfile); g_logfile = NULL; }
+    if (g_log_refnum >= 0) {
+        FSClose(g_log_refnum);
+        FlushVol(NULL, g_log_vrefnum);
+        g_log_refnum = -1;
+    }
     longjmp(doom_quit_jmp, 1);
 }
 
@@ -265,10 +308,10 @@ void I_Error(char *error, ...)
 
     /* Write to console and log file */
     doom_log("I_Error: %s\n", msg);
-    if (g_logfile) {
-        fflush(g_logfile);
-        fclose(g_logfile);
-        g_logfile = NULL;
+    if (g_log_refnum >= 0) {
+        FSClose(g_log_refnum);
+        FlushVol(NULL, g_log_vrefnum);
+        g_log_refnum = -1;
     }
 
     /* Wait for mouse click so the user can read the console */

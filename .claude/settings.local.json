@@ -18,7 +18,9 @@
       "WebFetch(domain:doomwiki.org)",
       "Bash(python3:*)",
       "Bash(m68k-apple-macos-gcc:*)",
-      "Bash(bash:*)"
+      "Bash(bash:*)",
+      "Bash(git -C /Users/michaeldiaz/develop/doom_se30 log --oneline | head -20)",
+      "Bash(find /Users/michaeldiaz/develop/doom_se30/Retro68-build -name \"*.a\" | xargs nm 2>/dev/null | grep \"^[0-9a-f]* T _open_r\" | head -5)"
     ]
   }
 }

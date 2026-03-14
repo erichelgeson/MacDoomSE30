@@ -50,12 +50,14 @@ void 	R_DrawColumnLow (void);
 void	R_DrawColumn_Mono (void);
 void	R_DrawColumnLow_Mono (void);
 void	R_DrawColumnQuadLow_Mono (void);   /* detailshift=2: 4px-wide columns */
+void	R_DrawColumnMushLow_Mono (void);   /* detailshift=3: 8px-wide columns */
 
 void	R_DrawFuzzColumn_Mono (void);
 void	R_DrawTranslatedColumn_Mono (void);
 void	R_DrawSpan_Mono (void);
 void	R_DrawSpanLow_Mono (void);
 void	R_DrawSpanQuadLow_Mono (void);     /* detailshift=2: 4px-wide spans */
+void	R_DrawSpanMushLow_Mono (void);     /* detailshift=3: 8px-wide spans */
 
 // The Spectre/Invisibility effect.
 void 	R_DrawFuzzColumn (void);
@@ -110,6 +112,8 @@ void	R_InitTranslationTables (void);
 
 // Initialize precomputed Bayer nibble tables for QUAD column renderer.
 void    R_InitQuadNibbleTables (void);
+// Initialize precomputed Bayer byte tables for MUSH column renderer.
+void    R_InitMushByteTables (void);
 
 
 

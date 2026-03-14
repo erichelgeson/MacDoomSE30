@@ -391,12 +391,16 @@ With pre-dithered textures, we can potentially **skip the intermediate buffer en
 - Each rendered pixel maps to a 2x2 block of screen pixels
 - Or: render at 256x171 and upscale 2x (simple byte doubling for 1-bit)
 
-**Detail modes (user-selectable):**
-| Mode | Render Resolution | Pixels | Expected FPS | Notes |
-|------|------------------|--------|-------------|-------|
-| High | 512 x 342 | 175,104 | ~5-8 | Native res, for screenshots |
-| Medium | 256 x 171 | 43,776 | ~15-25 | **Primary target** |
-| Low | 128 x 86 | 11,008 | ~30+ | Chunky but fast, 4x scale |
+**Detail modes (user-selectable, all implemented):**
+| Mode | detailLevel | Cols | Col Width | Pixels/frame* | Measured FPS† | Notes |
+|------|------------|------|-----------|--------------|--------------|-------|
+| HIGH | 0 | 224 | 1px | 224×128 = 28,672 | ~3-6 | Native col width |
+| LOW  | 1 | 112 | 2px | 112×128 = 14,336 | ~4-7 | 2px-wide columns |
+| QUAD | 2 | 56  | 4px | 56×128 = 7,168  | ~5-9 | **Default/recommended** — 4px cols, Bayer nibble LUT |
+| MUSH | 3 | 28  | 8px | 28×128 = 3,584  | ~5-11 | 8px cols, 1 byte/col write — implemented but visually unusable (28 cols below scene-recognition threshold); retained for future experimentation |
+
+*With halfline=1 (default), only even rows rendered → effective pixel count halved.
+†Basilisk II / Snow emulator measurements. Real SE/30 figures will differ.
 
 ### Wall Rendering with Pre-Dithered Textures
 
@@ -511,8 +515,12 @@ These are "free" performance wins decided at design time.
 
 #### Tier 5: Quality vs. Performance Knobs
 
-20. **Detail level** (high/medium/low resolution)
-21. **Floor rendering** (flat fills vs textured)
+20. **Detail level** — 4 levels implemented: HIGH(0) → LOW(1) → QUAD(2) → MUSH(3)
+    - QUAD is the practical default; see detail modes table in §9 for measured FPS
+    - MUSH (~7.3 FPS mean, 4.6–12.1 range) buys ~1 FPS over QUAD at the cost of
+      unrecognizable geometry (28 columns); retained in code, not recommended for play
+    - Bottleneck at QUAD/MUSH is BSP traversal + blit, not the column renderer itself
+21. **Floor rendering** (flat fills vs textured) — `solidfloor` opt eliminates all span work
 22. **Viewport size** adjustment
 23. **Max visible sprites** limit
 24. **Music on/off** (significant CPU savings — see Sound section)
