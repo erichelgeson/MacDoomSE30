@@ -33,6 +33,8 @@ extern jmp_buf doom_quit_jmp;
  */
 static FILE *g_logfile = NULL;
 
+#ifndef DOOM_RELEASE_BUILD
+
 void doom_log(const char *fmt, ...)
 {
     char buf[1024];
@@ -65,6 +67,8 @@ void doom_log_flush(void)
     FlushVol(NULL, 0);   /* flush default HFS volume → commits to ExtFS */
 }
 
+#endif /* !DOOM_RELEASE_BUILD */
+
 /* Play n short system beeps with a brief gap between them.
  * Used for detail-level feedback: HIGH=1, LOW=2, QUAD=3. */
 void I_MacBeep(int n)
@@ -79,6 +83,7 @@ void I_MacBeep(int n)
 
 void I_OpenLog(void)
 {
+#ifndef DOOM_RELEASE_BUILD
     g_logfile = fopen("doom_log.txt", "w");
     if (g_logfile) {
         /* Mark the file as Mac TEXT so SimpleText can open it */
@@ -97,6 +102,7 @@ void I_OpenLog(void)
         }
         doom_log("=== Doom SE/30 log opened ===\n");
     }
+#endif
 }
 
 /*

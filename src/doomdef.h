@@ -26,9 +26,15 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Route all printf output to the debug log file as well as the console.
- * doom_log() is defined in i_system_mac.c. */
+/* Route all printf output to the debug log file.
+ * In release builds doom_log/doom_log_flush compile away to nothing. */
+#ifdef DOOM_RELEASE_BUILD
+#  define doom_log(fmt, ...)  ((void)0)
+#  define doom_log_flush()    ((void)0)
+#else
 extern void doom_log(const char *fmt, ...);
+extern void doom_log_flush(void);
+#endif
 #define printf doom_log
 
 //

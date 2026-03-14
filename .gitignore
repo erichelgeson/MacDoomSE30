@@ -21,6 +21,7 @@ emulator/shared/DoomSE30.bin
 emulator/serial_debug.txt
 emulator/disks/backups/
 emulator/*
+emulator/shared/doom_log.txt
 
 # macOS
 .DS_Store

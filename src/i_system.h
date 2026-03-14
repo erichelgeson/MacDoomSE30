@@ -94,11 +94,18 @@ void I_Tactile (int on, int off, int total);
 
 void I_Error (char *error, ...);
 
-/* Debug log — writes to both the console window and doom_log.txt.
- * Uses \r line endings in the file so SimpleText can read it on
- * Classic Mac OS. */
+/* doom_log / doom_log_flush — release builds: no-op macros.
+ * Debug builds: write to doom_log.txt.
+ * NOTE: doomdef.h also defines these macros; this guard prevents redefinition. */
+#ifndef doom_log
+#  ifdef DOOM_RELEASE_BUILD
+#    define doom_log(fmt, ...)  ((void)0)
+#    define doom_log_flush()    ((void)0)
+#  else
 void doom_log (const char *fmt, ...);
-void doom_log_flush (void);  /* force HFS volume flush after critical log blocks */
+void doom_log_flush (void);
+#  endif
+#endif
 void I_MacBeep (int n);      /* play n short system beeps (detail-level feedback) */
 
 
