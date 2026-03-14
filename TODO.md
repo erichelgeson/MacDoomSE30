@@ -7,7 +7,7 @@
 - [ ] **Settings/config dialog** — DLOG/DITL to expose fog_scale, detail level, solid floor settings in-game (user will build DITL in ResEdit)
 
 ## Input / Responsiveness
-- [ ] Menu keystroke delay — reduce latency between keypress and menu response
+- [x] ~~Menu keystroke delay~~ — Fixed 2026-03-13: cache 1-bit background on first menu frame; subsequent frames restore via memcpy instead of 8000 blit8_sbar_thresh calls
 
 ## Rendering / Fog
 - [ ] Sky visibility with fog — sky can be fogged out; improve sky/fog interaction so sky remains visible
@@ -16,6 +16,7 @@
 - [ ] **Monitor for CHK errors on exit** (Basilisk II) — observed once after black background window work. longjmp/ExitToShell architecture seems correct; if it recurs investigate QuickDraw teardown order.
 
 ## Bugs
+- [ ] **Invisibility powerup weapon misrender** — when player has invisibility, weapon sprite renders skewed and displaced to the left. All weapons affected. Old bug, not introduced recently. Fuzz path (`R_DrawFuzzColumn_Mono`) suspected.
 - [x] ~~Sprites (barrels, non-enemy) culled much closer than fog distance~~ — Fixed 2026-03-13: QUAD mode rw_scale is <<detailshift vs raw xscale; fog comparison now uses (xscale << detailshift)
 - [x] ~~Explosion sprites invisible at fog distance~~ — Fixed 2026-03-13: P_ExplodeMissile clears MF_MISSILE from thing->flags; secondary check on thing->info->flags identifies "born-as-missile" objects
 - [x] ~~idclev cheat broken with doom2.wad~~ — Fixed 2026-03-13: epsd guard was rejecting episode 0 for commercial gamemode

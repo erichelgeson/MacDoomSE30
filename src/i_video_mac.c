@@ -90,6 +90,12 @@ const byte bayer4x4[4][4] = {
  * to redirect M_Drawer output. */
 byte *menu_overlay_buf = NULL;
 
+/* Menu background cache: 1-bit snapshot of the framebuffer saved on the first
+ * menu frame.  Subsequent menu frames restore this via memcpy instead of
+ * re-running 8000 blit8_sbar_thresh calls against screens[0]. */
+static unsigned char menu_bg_1bit[SCREENHEIGHT * (SCREENWIDTH >> 3)]; /* 200×40 = 8000 bytes */
+static boolean       menu_bg_valid = false;
+
 /* Set to true by d_main.c during the screen-wipe loop to force full blit.
  * During a wipe, wipe_ScreenWipe owns every pixel of screens[0]; we must not
  * skip the view area or the melt will show corrupted content. */
@@ -723,18 +729,39 @@ void I_FinishUpdate(void)
         }
 
     } else {
-        /* Non-direct (menu, wipe, intermission, title): blit8_sbar_thresh for the
-         * entire screen — same high-contrast threshold used for the HUD.
-         * No Bayer dithering, no sbar/non-sbar split.
+        /* Non-direct (menu, wipe, intermission, title): blit screens[0] to 1-bit fb.
+         * Menu frames: restore cached 1-bit background instead of re-blitting every
+         * frame — eliminates 8000 blit8_sbar_thresh calls per menu frame.
          * last_direct=false ensures the next direct frame triggers do_border=true,
          * re-blitting the border after wipe/menu may have written over it. */
-        for (y = 0; y < SCREENHEIGHT; y++) {
-            const byte    *sr  = src + y * SCREENWIDTH;
-            unsigned char *dst = (unsigned char *)(fb_mono_base
-                                 + (y + yoff) * fb_mono_rowbytes) + (xoff >> 3);
-            for (x = 0; x < SCREENWIDTH; x += 8)
-                *dst++ = blit8_sbar_thresh(sr + x);
+        int col_off   = xoff >> 3;
+        int col_bytes = SCREENWIDTH >> 3;   /* 40 bytes per row */
+
+        if (menuactive && menu_bg_valid) {
+            /* Fast path: restore cached 1-bit background */
+            for (y = 0; y < SCREENHEIGHT; y++)
+                memcpy((unsigned char *)fb_mono_base + (y + yoff) * fb_mono_rowbytes + col_off,
+                       menu_bg_1bit + y * col_bytes,
+                       col_bytes);
+        } else {
+            /* Full blit from screens[0] */
+            for (y = 0; y < SCREENHEIGHT; y++) {
+                const byte    *sr  = src + y * SCREENWIDTH;
+                unsigned char *dst = (unsigned char *)(fb_mono_base
+                                     + (y + yoff) * fb_mono_rowbytes) + col_off;
+                for (x = 0; x < SCREENWIDTH; x += 8)
+                    *dst++ = blit8_sbar_thresh(sr + x);
+            }
+            /* Save the just-blitted 1-bit background on first menu frame */
+            if (menuactive) {
+                for (y = 0; y < SCREENHEIGHT; y++)
+                    memcpy(menu_bg_1bit + y * col_bytes,
+                           (unsigned char *)fb_mono_base + (y + yoff) * fb_mono_rowbytes + col_off,
+                           col_bytes);
+                menu_bg_valid = true;
+            }
         }
+        if (!menuactive) menu_bg_valid = false;
     }
 
     last_direct = is_direct;
