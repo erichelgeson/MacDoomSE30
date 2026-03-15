@@ -81,9 +81,21 @@ if [ -n "$BIN_FILE" ]; then
     echo ""
     echo "--- Deployed ($BUILD_LABEL) ---"
     echo "  $(basename "$BIN_FILE") → $SHARED_DIR/"
+
+    # Stage deployment package for .sit creation
+    STAGE_DIR="$SHARED_DIR/MacDoom_SE30"
+    mkdir -p "$STAGE_DIR"
+    cp "$BIN_FILE" "$STAGE_DIR/"
+    DEPLOY_DIR="$PROJECT_DIR/deployment_files"
+    if [ -d "$DEPLOY_DIR" ]; then
+        cp "$DEPLOY_DIR"/* "$STAGE_DIR/" 2>/dev/null || true
+    fi
+    echo "  Staged package → $STAGE_DIR/"
     echo ""
     echo "File is now available in the Basilisk II shared folder."
     echo "In the emulator: open the 'Unix' volume and double-click the app."
+    echo "To create .sit: stuff the MacDoom_SE30 folder on the Mac side,"
+    echo "  then copy the .sit back to $PROJECT_DIR/dist/"
 else
     echo ""
     echo "WARNING: No .bin output found. Check build output above."

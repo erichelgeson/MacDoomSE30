@@ -1,0 +1,6 @@
+# StuffIt archive — binary, no line-ending conversion
+dist/*.sit binary
+
+# Deployment text files — preserve Classic Mac CR line endings
+deployment_files/README text eol=cr
+deployment_files/*.cfg text eol=cr
