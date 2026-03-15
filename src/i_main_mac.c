@@ -452,6 +452,21 @@ int main(void)
         SetPort(bg_window);
         local_r = bg_window->portRect;
         FillRect(&local_r, &qd.black);
+        TextFont(systemFont);
+        TextSize(12);
+        TextFace(bold);
+        TextMode(srcBic);  /* white text on black */
+        {
+            ConstStr255Param line1 = "\pLOADING WAD FILE...";
+            ConstStr255Param line2 = "\pThis takes about 10 seconds...";
+            MoveTo((qd.screenBits.bounds.right - qd.screenBits.bounds.left - StringWidth(line1)) / 2, 
+                    (qd.screenBits.bounds.bottom - qd.screenBits.bounds.top-12)/2);
+            DrawString(line1);
+            MoveTo((qd.screenBits.bounds.right - qd.screenBits.bounds.left - StringWidth(line2)) / 2,
+            (qd.screenBits.bounds.bottom - qd.screenBits.bounds.top+12)/2);
+            DrawString(line2);
+        }
+        TextFace(normal);
     }
 
     /* Set up Doom's command-line argument globals */

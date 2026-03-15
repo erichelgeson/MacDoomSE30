@@ -204,6 +204,7 @@ int   no_lighting   = 0;
 /* fog_scale: distance threshold (fixed_t units; 0=off) — defined in d_main.c,
  * referenced here for save/load and runtime adjustment.                     */
 extern int fog_scale;
+int menu_thresh = 88;   /* luminance threshold for menu overlay (0-255) */
 
 /* Saved copy of the last palette Doom passed to I_SetPalette.
  * Needed to rebuild grayscale_pal when dither params change at runtime.   */
@@ -624,6 +625,20 @@ static inline unsigned char blit8_black(const byte *src)
     return out;
 }
 
+/* blit8_menu — luminance-threshold menu overlay.
+ * Pixel → black only when index != 0 AND grayscale_pal[index] > menu_thresh.
+ * Transparent (index 0) and dark background pixels below threshold → white.
+ * menu_thresh runtime-tunable via I_AdjustDither(7, ±1). */
+static inline unsigned char blit8_menu(const byte *src)
+{
+    unsigned char out = 0;
+#define MK(n,bit) if (src[n] && grayscale_pal[src[n]] > menu_thresh) out |= (bit)
+    MK(0, 0x80); MK(1, 0x40); MK(2, 0x20); MK(3, 0x10);
+    MK(4, 0x08); MK(5, 0x04); MK(6, 0x02); MK(7, 0x01);
+#undef MK
+    return out;
+}
+
 /*
  * I_FinishUpdate — blit Doom's 320x200 8-bit buffer to the 512x342 1-bit screen.
  *
@@ -886,7 +901,7 @@ void I_FinishUpdate(void)
             const byte    *ovr = overlay + y * SCREENWIDTH;
             unsigned char *dst = fb_offscreen_buf
                                  + (y + s_phys_yoff) * s_phys_rbytes + s_phys_xoff_byte;
-            for (x = 0; x < SCREENWIDTH; x += 8) { *dst &= ~blit8_black(ovr + x); dst++; }
+            for (x = 0; x < SCREENWIDTH; x += 8) { *dst &= ~blit8_menu(ovr + x); dst++; }
         }
     }
 
