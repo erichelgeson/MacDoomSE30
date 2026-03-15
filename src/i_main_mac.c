@@ -335,11 +335,43 @@ static pascal Boolean SplashFilterProc(DialogPtr dlg, EventRecord *event, short 
 }
 
 static char *mac_argv[] = { "DoomSE30" };
+static WindowPtr bg_window = nil;  /* fullscreen black background window */
+
+void I_NoWadAlert(void)
+{
+    EventRecord evt;
+    ConstStr255Param line1 = "\pNo WAD file found.";
+    ConstStr255Param line2 = "\pPlace a WAD file next to this application.";
+    ConstStr255Param line3 = "\pClick or press any key to exit.";
+    int cx = (qd.screenBits.bounds.right - qd.screenBits.bounds.left) / 2;
+    int cy = (qd.screenBits.bounds.bottom - qd.screenBits.bounds.top) / 2;
+
+    if (!bg_window) return;
+    SetPort(bg_window);
+    /* Clear loading text by repainting black */
+    {
+        Rect r = bg_window->portRect;
+        FillRect(&r, &qd.black);
+    }
+    TextFont(systemFont);
+    TextSize(12);
+    TextFace(bold);
+    TextMode(srcBic);
+    MoveTo(cx - StringWidth(line1) / 2, cy - 14);
+    DrawString(line1);
+    MoveTo(cx - StringWidth(line2) / 2, cy);
+    DrawString(line2);
+    TextFace(normal);
+    MoveTo(cx - StringWidth(line3) / 2, cy + 18);
+    DrawString(line3);
+
+    while (!GetNextEvent(mDownMask | keyDownMask, &evt))
+        ;
+}
 
 int main(void)
 {
     DialogPtr       splashdialog;
-    WindowPtr       bg_window;   /* fullscreen black background window */
 
     /* Standard Mac Toolbox init — MUST come before any QuickDraw/printf */
     MaxApplZone();

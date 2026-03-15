@@ -21,6 +21,7 @@
 - [ ] **Fix sky clipping** rendering bugs when OPTION "solid fill ceiling/floor" texture rendering is set to OFF
 
 ### Stability / Exit
+- [x] ~~**Missing WAD detection**~~ — shows message on bg_window + waits for click/key, then clean exit; done.
 - [ ] **Monitor for CHK errors, other crashes on exit** (Basilisk II and Snow) — observed once; likely transient
 
 ## Bugs Fixed

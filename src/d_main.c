@@ -922,9 +922,13 @@ void IdentifyVersion (void)
     printf("Game mode indeterminate.\n");
     gamemode = indetermined;
 
-    // We don't abort. Let's see what the PWAD contains.
-    //exit(1);
-    //I_Error ("Game mode indeterminate\n");
+    /* No WAD found — show message on bg_window and exit cleanly. */
+    if (!wadfiles[0])
+    {
+        extern void I_NoWadAlert(void);
+        I_NoWadAlert();
+        I_Quit();
+    }
 }
 
 //
