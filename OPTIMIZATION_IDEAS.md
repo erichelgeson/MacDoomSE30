@@ -18,13 +18,17 @@ confirmed, or ruled out. Mark status with: `[ ]` untried, `[x]` done, `[-]` trie
   issue). Snow showed HUD fine but savings marginal (~1–2 ticks on 7–28 total).
   Rejected 2026-03-09.
 
-- [ ] **Optimize P_Ticker** — Profiled 2026-03-09: `ptick` = 98–100% of `logic` in every
-  frame. G_Ticker overhead (input, M/AM/HU_Ticker) is only 1–2 ticks — P_Ticker is the
-  entire logic cost. Typical ptick: 7–21 ticks/window, max 23. At render-light scenes
-  (fast FPS), logic can be 50–80% of render cost — actionable. Next step: sub-profile
-  inside P_Ticker to identify whether AI think (P_MobjThinker), movement (P_XYMovement),
-  or sector specials (P_UpdateSpecials) dominate. Candidate: add per-category timers to
-  `p_tick.c` / `p_map.c`.
+- [x] **P_CheckSight cache** — 64-entry hash table in `p_sight.c` caches BSP raycast
+  results for 4 game tics (114ms). Eliminates repeated `P_CrossBSPNode` walks for
+  the same monster→target pair. Result on Plutonia MAP20: logic dropped from 50–69%
+  to 43–61% of frame time, ~7% FPS gain. Monsters react at most 4 tics late to
+  player visibility changes — barely perceptible. (2026-03-21)
+
+- [ ] **Optimize P_Ticker further** — Profiled 2026-03-21 on Plutonia MAP20: even with
+  sight cache, logic is 43–61% of frame time on monster-dense maps. Remaining cost is
+  `P_Move`/`P_TryMove` (blockmap collision per monster per tic) and `P_MobjThinker`
+  (state machine, gravity). Candidate: throttle `P_Move` for distant monsters, or
+  reduce collision check frequency. Would change gameplay behavior.
 
 ---
 
@@ -101,3 +105,15 @@ confirmed, or ruled out. Mark status with: `[ ]` untried, `[x]` done, `[-]` trie
 - [x] **QUAD nibble precomputed table** — Replace QUAD_NIBBLE 4×CMP/shift/OR with 1 table lookup (2026-03-08)
 - [x] **Colormap/lighting index cache** — Skip `dc_colormap` update when `walllights[index]` unchanged across adjacent columns (2026-03-08)
 - [-] **Pre-dithered texture columns (Option D)** — Tried and removed 2026-03-02: -3.7% FPS (slower) and visually broken (texture-space Bayer becomes perspective-warped spirals in screen space)
+- [-] **Iterative BSP traversal** — Replaced recursive `R_RenderBSPNode` with explicit
+  stack + early-out solidsegs check. Result: **10% regression** (5.91 vs 6.6 mean FPS).
+  Likely cause: larger code footprint thrashing 68030's 256-byte instruction cache.
+  Recursive version's tiny code body fits in cache; iterative version with two stack
+  arrays and inner pop loop does not. Reverted 2026-03-21.
+- [-] **R_PointToDist elimination** — Replaced `SlopeDiv`+`FixedDiv` (~280 cycles) with
+  direct perpendicular dot-product (2× FixedMul, ~80 cycles) for `rw_distance` and
+  `rw_offset` in `R_StoreWallRange`. Bundled with iterative BSP; reverted together.
+  May be worth retesting in isolation. (2026-03-21)
+- [x] **Bulk sprite init I/O** — `R_InitSpriteLumps` replaced 1381 individual `lseek`+`read`
+  calls with single 3.6 MB bulk read into temp buffer, headers parsed in-memory.
+  Reduces startup time on SCSI. (2026-03-21)

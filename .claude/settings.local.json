@@ -28,7 +28,24 @@
       "Bash(find /Users/michaeldiaz/develop/doom_se30/Retro68-build -type f \\\\\\( -name \"*.c\" -o -name \"*.h\" -o -name \"*.cpp\" \\\\\\) 2>/dev/null | head -20)",
       "Bash(find /Users/michaeldiaz/develop/doom_se30/Retro68-build -iname \"*sound*\" -type f 2>/dev/null | head -20)",
       "Bash(find /Users/michaeldiaz/develop/doom_se30/Retro68 -type f \\\\\\( -name \"*.c\" -o -name \"*.h\" \\\\\\) 2>/dev/null | grep -i example | head -20)",
-      "Bash(find /Users/michaeldiaz/develop/doom_se30/Retro68 -type d -name \"samples\" -o -type d -name \"test*\" 2>/dev/null | head -10)"
+      "Bash(find /Users/michaeldiaz/develop/doom_se30/Retro68 -type d -name \"samples\" -o -type d -name \"test*\" 2>/dev/null | head -10)",
+      "Bash(find /Users/michaeldiaz/develop/doom_se30/FastDoom -maxdepth 2 -type f -name \"README*\" -o -name \"CHANGELOG*\" -o -name \"HISTORY*\" -o -name \"*.md\" 2>/dev/null | head -20)",
+      "Bash(git -C /Users/michaeldiaz/develop/doom_se30/FastDoom log --oneline -100)",
+      "Bash(ls /Users/michaeldiaz/develop/doom_se30/FastDoom/FASTDOOM/*.c /Users/michaeldiaz/develop/doom_se30/FastDoom/FASTDOOM/*.h /Users/michaeldiaz/develop/doom_se30/FastDoom/FASTDOOM/*.asm 2>/dev/null | wc -l && ls /Users/michaeldiaz/develop/doom_se30/FastDoom/FASTDOOM/ | grep -E '\\\\.\\(c|h|asm\\)$' | sort)",
+      "Bash(git -C /Users/michaeldiaz/develop/doom_se30/FastDoom log --oneline --all | wc -l)",
+      "Bash(git -C /Users/michaeldiaz/develop/doom_se30/FastDoom tag -l | head -30)",
+      "Bash(git -C /Users/michaeldiaz/develop/doom_se30/FastDoom log --oneline --all | tail -50)",
+      "Bash(ls /Users/michaeldiaz/develop/doom_se30/FastDoom/FASTDOOM/*.c | head -30)",
+      "Bash(git -C /Users/michaeldiaz/develop/doom_se30/FastDoom log --all --pretty=format:\"%h %s\" | head -200)",
+      "Bash(ls -lh /Users/michaeldiaz/develop/doom_se30/FastDoom/FASTDOOM/*.asm | head -20)",
+      "Bash(ls /Users/michaeldiaz/develop/doom_se30/FastDoom/FASTDOOM/*.asm | wc -l)",
+      "Bash(git -C /Users/michaeldiaz/develop/doom_se30/FastDoom log --all --pretty=format:\"%h %s\" | grep -i \"mmu\\\\|mmix\\\\|pentium\\\\|k6\\\\|cpu\\\\|detection\\\\|span\\\\|column\\\\|draw\" | head -50)",
+      "Bash(git -C /Users/michaeldiaz/develop/doom_se30/FastDoom log --all --oneline | grep -i \"cleanup\\\\|remove\\\\|unused\" | head -20)",
+      "Bash(ls -lh /Users/michaeldiaz/develop/doom_se30/FastDoom/FASTDOOM/*.c)",
+      "Bash(xargs ls:*)",
+      "Bash(SNOW_NEW=/Users/michaeldiaz/develop/doom_se30/emulator/shared/doom_log.txt __NEW_LINE_2ab1d0608db1ee22__ echo \"=== Snow v2 \\(fixed BSP\\) ===\" cat \"$SNOW_NEW\")",
+      "Bash(ls /Users/michaeldiaz/develop/doom_se30/*.md /Users/michaeldiaz/develop/doom_se30/src/*.md /Users/michaeldiaz/develop/doom_se30/docs/*.md 2>/dev/null)",
+      "Bash(git checkout:*)"
     ]
   }
 }

@@ -403,6 +403,10 @@ static int stsnap_face;
 static int stsnap_cards;    /* plyr->cards[0..5] packed into low 6 bits */
 static int stsnap_weapons;  /* plyr->weaponowned[1..6] packed into low 6 bits */
 
+/* Set when ST_Drawer actually writes to screens[0].
+ * I_FinishUpdate checks this to know when to re-blit the sbar area. */
+int sbar_dirty = 0;
+
 
 
 // Massive bunches of cheat shit
@@ -1130,6 +1134,7 @@ void ST_Drawer (boolean fullscreen, boolean refresh)
     if (st_firsttime)
     {
 	ST_doRefresh();
+	sbar_dirty = 1;
 	/* Update snapshots to match what was just fully drawn */
 	stsnap_health  = plyr->health;
 	stsnap_armor   = plyr->armorpoints;
@@ -1171,6 +1176,7 @@ void ST_Drawer (boolean fullscreen, boolean refresh)
 	}
 
 	ST_diffDraw();
+	sbar_dirty = 1;
 
 	stsnap_health  = plyr->health;
 	stsnap_armor   = plyr->armorpoints;

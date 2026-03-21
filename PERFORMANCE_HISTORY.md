@@ -31,6 +31,50 @@ All SE/30-specific options, their ranges, typical test values, and performance i
 
 ---
 
+## 2026-03-21 — P_CheckSight Cache + Bulk Sprite Init + Key Fixes
+**Emulator: Snow (debug build)**
+**WAD: TNT, tested on Plutonia MAP20 (high monster density)**
+
+### Changes
+- **P_CheckSight cache** (`p_sight.c`): 64-entry hash table caches BSP raycast results
+  for 4 game tics (114ms). Same monster→target pair returns cached result without
+  repeating the full `P_CrossBSPNode` walk. Reject table still checked every call.
+- **Bulk sprite init** (`r_data.c`): `R_InitSpriteLumps` replaced 1381 individual
+  `lseek`+`read` calls with a single 3.6 MB bulk read. Headers parsed from buffer.
+  Reduces startup time on SCSI.
+- **Key table fix** (`i_input_mac.c`): added `9` (0x19) and `0` (0x1D) to kKeyTable.
+  `idclev20` etc. now work.
+- **Zone usage logging** (`p_setup.c`): `ZONE after level load: free=N KB` logged
+  after each level load. Measured: ~1 MB used out of 32 MB zone across all tested maps.
+
+### Plutonia MAP20 Performance (monster-heavy worst case)
+
+| Metric | Before (no sight cache) | After (sight cache) |
+|--------|------------------------|---------------------|
+| Mean FPS | ~3.0 | ~3.2 |
+| Logic % of frame | **50–69%** | **43–61%** |
+| Logic ticks (typical) | 80–130 | 50–100 |
+| Render % of frame | ~25% | ~28–33% |
+
+Logic still dominates on MAP20 due to monster density. The remaining logic cost is
+`P_Move`/`P_TryMove` (collision detection) and `P_MobjThinker` (state machine, gravity)
+which run every tic regardless of sight caching.
+
+### Key Finding: Logic vs Render Bottleneck
+On monster-dense maps (Plutonia MAP20), game logic (`P_Ticker`) consumes 50–69% of
+frame time. Even with instant rendering, FPS would cap around 4–5 on these maps.
+On lighter maps (TNT MAP01), logic is only 14–20% of frame time. The bottleneck
+shifts from render to logic as monster count increases.
+
+### Tried and Reverted (this session)
+- **Iterative BSP traversal** (`r_bsp.c`): replaced recursive `R_RenderBSPNode` with
+  explicit stack. Result: **10% regression** (mean 5.91 vs 6.6 baseline). Likely cause:
+  larger code footprint thrashing 68030's 256-byte instruction cache. Reverted.
+- **R_PointToDist elimination** (`r_segs.c`): replaced `SlopeDiv`+`FixedDiv` with
+  direct dot-product formula (2× FixedMul). Bundled with BSP change; reverted together.
+
+---
+
 ## 2026-03-14 — 2× Pixel-Scale Mode vs Non-2× (Basilisk II)
 **Emulator: Basilisk II (debug build)**
 **Config: detailLevel=2 halfline=1 affinetex=1 solidfloor=1 solidfloor_gray=4**

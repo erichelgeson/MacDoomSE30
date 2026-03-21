@@ -76,13 +76,16 @@ static byte     raw_gray[256];
 #define SBAR_WHITE 193   /* digit yellow/orange R ≈ 180-240 → white */
 static byte     sbar_gray[256];
 
-/* 4x4 Bayer ordered dither threshold matrix (0-15 scaled to 0-255).
+/* 4x4 Bayer ordered dither threshold matrix — high-contrast variant.
+ * Threshold range compressed to [48..208]: gray < 48 → always black,
+ * gray > 208 → always white.  Pushes more area to solid black/white,
+ * giving crisper contrast on the SE/30's 1-bit display.
  * Non-static so r_draw.c can use the same matrix. */
 const byte bayer4x4[4][4] = {
-    {  0, 136,  34, 170 },
-    { 204,  68, 238, 102 },
-    {  51, 187,  17, 153 },
-    { 255, 119, 221,  85 }
+    { 48, 133,  69, 154 },
+    { 176,  90, 197, 112 },
+    {  80, 165,  58, 144 },
+    { 208, 122, 186, 101 }
 };
 
 /* Dedicated menu overlay buffer — M_Drawer renders here (not into screens[1],
@@ -827,14 +830,19 @@ void I_FinishUpdate(void)
             }
         }
 
-        /* --- Region 4: status bar rows — skipped when view fills the screen,
-         * unless do_border is set (e.g. view just shrank back from max). --- */
-        if (vy1 < sbar0 || do_border) {
-            for (y = sbar0; y < SCREENHEIGHT; y++) {
-                const byte    *sr  = src + y * SCREENWIDTH;
-                unsigned char *dst = (unsigned char *)(fb_mono_base
-                                     + (y + yoff) * fb_mono_rowbytes) + (xoff >> 3);
-                for (x = 0; x < SCREENWIDTH; x += 8) *dst++ = blit8_sbar_thresh(sr + x);
+        /* --- Region 4: status bar rows.  Always blit when view doesn't
+         * cover sbar (vy1 < sbar0) or border forced.  When view fills
+         * the screen, only re-blit when ST_Drawer actually drew. --- */
+        {
+            extern int sbar_dirty;
+            if (vy1 < sbar0 || do_border || sbar_dirty) {
+                sbar_dirty = 0;
+                for (y = sbar0; y < SCREENHEIGHT; y++) {
+                    const byte    *sr  = src + y * SCREENWIDTH;
+                    unsigned char *dst = (unsigned char *)(fb_mono_base
+                                         + (y + yoff) * fb_mono_rowbytes) + (xoff >> 3);
+                    for (x = 0; x < SCREENWIDTH; x += 8) *dst++ = blit8_sbar_thresh(sr + x);
+                }
             }
         }
 
