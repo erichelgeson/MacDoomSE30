@@ -934,31 +934,32 @@ void I_FinishUpdate(void)
         }
     }
 
-    /* Double-buffer flip: copy completed frame from fb_offscreen_buf → real screen. */
+    /* Double-buffer flip: copy completed frame from fb_offscreen_buf → real screen.
+     * Uses long* (MOVE.L) instead of memcpy to guarantee 32-bit bus transfers —
+     * 4 bytes per bus cycle vs 1, ~4× faster on 68030's 32-bit data bus. */
     if (real_fb_base) {
         int flip_y;
         if (opt_scale2x && (is_direct || menuactive)) {
-            /* 2x direct/menu flip: copy the expanded view rows (full width) + sbar rows.
-             * During menu in 2x mode the frozen game frame occupies these same rows,
-             * so using the full-width 2x flip range is correct for both cases.
-             * fb_offscreen_buf was cleared to 0xFF (black) on layout change, so
-             * side areas outside the expanded view are already black — full-row
-             * copy is correct and avoids separate side-bar handling. */
+            /* 2x direct/menu flip: copy the expanded view rows (full width) + sbar rows. */
             int flip_end = scale2x_sbar_y0 + SBARHEIGHT;
-            for (flip_y = scale2x_dest_y0; flip_y < flip_end; flip_y++)
-                memcpy((unsigned char *)real_fb_base + flip_y * s_phys_rbytes,
-                       fb_offscreen_buf             + flip_y * s_phys_rbytes,
-                       s_phys_rbytes);
+            int longs_per_row = s_phys_rbytes >> 2;  /* 64/4 = 16 */
+            for (flip_y = scale2x_dest_y0; flip_y < flip_end; flip_y++) {
+                long *dst = (long *)((unsigned char *)real_fb_base + flip_y * s_phys_rbytes);
+                const long *sr = (const long *)(fb_offscreen_buf + flip_y * s_phys_rbytes);
+                int i;
+                for (i = 0; i < longs_per_row; i++) dst[i] = sr[i];
+            }
         } else {
             /* Normal flip: 40 bytes × 200 rows (320px game area, centred).
-             * Leaves the 12-byte margins on each side of the real screen
-             * untouched (they stay black from the QuickDraw background window). */
-            int col_bytes = SCREENWIDTH >> 3;  /* 40 */
+             * 40 bytes = 10 longs.  s_phys_xoff_byte (12) is 4-aligned.
+             * Unrolled 10× MOVE.L to guarantee 32-bit bus transfers
+             * (GCC converts loop-based copies back to memcpy). */
             for (flip_y = 0; flip_y < SCREENHEIGHT; flip_y++) {
                 int row = flip_y + s_phys_yoff;
-                memcpy((unsigned char *)real_fb_base + row * s_phys_rbytes + s_phys_xoff_byte,
-                       fb_offscreen_buf             + row * s_phys_rbytes + s_phys_xoff_byte,
-                       col_bytes);
+                long *d = (long *)((unsigned char *)real_fb_base + row * s_phys_rbytes + s_phys_xoff_byte);
+                const long *s = (const long *)(fb_offscreen_buf + row * s_phys_rbytes + s_phys_xoff_byte);
+                d[0]=s[0]; d[1]=s[1]; d[2]=s[2]; d[3]=s[3]; d[4]=s[4];
+                d[5]=s[5]; d[6]=s[6]; d[7]=s[7]; d[8]=s[8]; d[9]=s[9];
             }
         }
     }

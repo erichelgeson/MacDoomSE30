@@ -210,6 +210,26 @@ long I_GetMacTick(void)
 
 void I_Init(void)
 {
+    /* Phase 1A: Enable 68030 data cache if disabled.
+     * The SE/30 ROM enables instruction cache but NOT data cache.
+     * 68030 data cache is write-through (safe for DMA/framebuffer).
+     * HWPriv selector 2 = SwapDataCache(enable). Returns previous state. */
+    {
+        long prev_d0 = 2;           /* selector: SwapDataCache */
+        long prev_a0 = 1;           /* TRUE = enable */
+        /* Call _HWPriv trap; previous state returned in a0 */
+        asm volatile (
+            "move.l %1, %%d0\n\t"
+            "move.l %2, %%a0\n\t"
+            "dc.w 0xA198\n\t"       /* _HWPriv */
+            "move.l %%a0, %0"
+            : "=g"(prev_a0)
+            : "g"(prev_d0), "g"(prev_a0)
+            : "d0", "d1", "d2", "a0", "a1", "memory"
+        );
+        doom_log("I_Init: SwapDataCache(TRUE) prev=%ld\r", prev_a0);
+    }
+
     I_InitSound();
     /* I_InitGraphics is called separately by D_DoomMain */
 }

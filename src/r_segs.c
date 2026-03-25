@@ -525,7 +525,7 @@ R_StoreWallRange
 {
     fixed_t		hyp;
     fixed_t		sineval;
-    angle_t		distangle, offsetangle;
+    angle_t		offsetangle;
     fixed_t		vtop;
     int			lightnum;
 
@@ -547,15 +547,19 @@ R_StoreWallRange
     
     // calculate rw_distance for scale calculation
     rw_normalangle = curline->angle + ANG90;
-    offsetangle = abs(rw_normalangle-rw_angle1);
-    
-    if (offsetangle > ANG90)
-	offsetangle = ANG90;
 
-    distangle = ANG90 - offsetangle;
-    hyp = R_PointToDist (curline->v1->x, curline->v1->y);
-    sineval = finesine[distangle>>ANGLETOFINESHIFT];
-    rw_distance = FixedMul (hyp, sineval);
+    // Phase 2C: perpendicular distance via dot product (2 FixedMul)
+    // replaces R_PointToDist (2 FixedDiv) + 1 FixedMul.
+    // hyp (actual distance to v1) deferred to textured-seg path only.
+    {
+	fixed_t dx = curline->v1->x - viewx;
+	fixed_t dy = curline->v1->y - viewy;
+	unsigned na = rw_normalangle >> ANGLETOFINESHIFT;
+	rw_distance = abs(FixedMul(dx, finecosine[na])
+			  + FixedMul(dy, finesine[na]));
+	if (rw_distance < 1) rw_distance = 1;
+    }
+    hyp = 0; /* computed lazily below if segtextured */
 		
 	
     ds_p->x1 = rw_x = start;
@@ -811,8 +815,10 @@ R_StoreWallRange
 
     if (segtextured)
     {
+	hyp = R_PointToDist (curline->v1->x, curline->v1->y);
+
 	offsetangle = rw_normalangle-rw_angle1;
-	
+
 	if (offsetangle > ANG180)
 	    offsetangle = -offsetangle;
 

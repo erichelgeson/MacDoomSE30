@@ -45,6 +45,8 @@ rcsid[] = "$Id: p_enemy.c,v 1.5 1997/02/03 22:45:11 b1 Exp $";
 // Data.
 #include "sounds.h"
 
+extern int monster_throttle_dist;  /* d_main.c — map-unit P_Move skip threshold */
+
 
 
 
@@ -761,10 +763,20 @@ void A_Chase (mobj_t*	actor)
     }
     
     // chase towards player
-    if (--actor->movecount<0
-	|| !P_Move (actor))
+    // Phase 2A: throttle P_Move for distant monsters — skip every other tic.
+    // P_Move→P_TryMove does blockmap collision, expensive on dense maps.
+    // monster_throttle_dist (map units, doom.cfg) controls the threshold.
     {
-	P_NewChaseDir (actor);
+	int do_move = 1;
+	if (monster_throttle_dist > 0 && (gametic & 1)) {
+	    fixed_t dx = actor->x - players[consoleplayer].mo->x;
+	    fixed_t dy = actor->y - players[consoleplayer].mo->y;
+	    fixed_t thresh = (fixed_t)monster_throttle_dist << FRACBITS;
+	    if (abs(dx) > thresh || abs(dy) > thresh)
+		do_move = 0;
+	}
+	if (do_move && (--actor->movecount<0 || !P_Move (actor)))
+	    P_NewChaseDir (actor);
     }
     
     // make active sound

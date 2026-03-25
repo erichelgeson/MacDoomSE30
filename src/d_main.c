@@ -124,6 +124,9 @@ int opt_scale2x       = 0;
 /* Sound effects: 0=off (silent, zero overhead), 1=on (Sound Manager SFX).
  * Default OFF to preserve existing performance baseline. */
 int opt_sound         = 0;
+/* Monster AI throttle: skip P_Move for monsters farther than this (map units).
+ * 1024 ≈ 1.2s walking distance.  0 = no throttle.  Tunable in options GUI. */
+int monster_throttle_dist = 1024;
 
 extern int detailLevel;   /* defined in m_menu.c */
 
@@ -565,8 +568,9 @@ void D_DoomLoop (void)
 	    }
 	    doom_log("  hud: st=%ld hu=%ld menu=%ld\r",
 		     prof_hud_st, prof_hud_hu, prof_hud_mn);
-	    doom_log("  pal_skips=%ld quad_calls=%ld\r",
-		     prof_palette_skips, prof_r_quad_calls);
+	    doom_log("  pal_skips=%ld quad_calls=%ld snd_cpu=%d\r",
+		     prof_palette_skips, prof_r_quad_calls,
+		     I_GetSoundCPULoad());
 	    doom_log_flush();  /* force HFS commit so data survives a crash */
 
 	    ft_frames       = 0;
@@ -1245,8 +1249,8 @@ void D_DoomMain (void)
     doom_log ("CHKPT: entering M_LoadDefaults\n");
     M_LoadDefaults ();              // load before initing other systems
     doom_log ("CHKPT: M_LoadDefaults done\r");
-    doom_log("D_DoomMain: opt_halfline=%d opt_affinetex=%d opt_solidfloor=%d solidfloor_gray=%d detailLevel=%d opt_scale2x=%d opt_sound=%d\r",
-             opt_halfline, opt_affine_texcol, opt_solidfloor, solidfloor_gray, detailLevel, opt_scale2x, opt_sound);
+    doom_log("D_DoomMain: opt_halfline=%d opt_affinetex=%d opt_solidfloor=%d solidfloor_gray=%d detailLevel=%d opt_scale2x=%d opt_sound=%d monster_throttle=%d\r",
+             opt_halfline, opt_affine_texcol, opt_solidfloor, solidfloor_gray, detailLevel, opt_scale2x, opt_sound, monster_throttle_dist);
 
     printf ("Z_Init: Init zone memory allocation daemon. \n");
     doom_log ("CHKPT: entering Z_Init\n");

@@ -118,6 +118,8 @@ void I_StopSong(int handle);
 // See above (register), then think backwards
 void I_UnRegisterSong(int handle);
 
+// Phase 1D: Query Sound Manager CPU load (0-100, or -1 on error)
+int I_GetSoundCPULoad(void);
 
 
 #endif

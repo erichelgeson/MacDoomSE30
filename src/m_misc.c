@@ -211,6 +211,7 @@ extern int	solidfloor_gray;
 extern int	fog_scale;
 extern int	opt_scale2x;
 extern int	opt_sound;
+extern int	monster_throttle_dist;
 
 /* dither params — consolidated from doom_dither.cfg into doom.cfg */
 extern int	dither_gamma_x100;  /* gamma ×100: 60 = 0.60, range 5-300 */
@@ -310,6 +311,9 @@ default_t	defaults[] =
     {"scale2x",         &opt_scale2x,       0},
     /* Sound effects: 0=off (silent, zero overhead), 1=on (Sound Manager SFX) */
     {"opt_sound",       &opt_sound,         0},
+    /* monster_throttle_dist: map-unit distance beyond which P_Move is
+     * skipped on alternate tics.  1024 ≈ 1.2s walking.  0 = disabled. */
+    {"monster_throttle_dist", &monster_throttle_dist, 1024},
 
     /* Dither/display params — consolidated from doom_dither.cfg */
     {"dither_gamma_x100", &dither_gamma_x100, 60 },   /* 0.60 gamma */

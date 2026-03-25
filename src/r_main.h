@@ -105,13 +105,47 @@ extern void		(*transcolfunc) (void);
 extern void		(*spanfunc) (void);
 
 
-//
 // Utility functions.
-int
+// Phase 3B: R_PointOnSide inlined — saves ~60-120 cycles/call (JSR/RTS/prologue)
+static inline int
 R_PointOnSide
 ( fixed_t	x,
   fixed_t	y,
-  node_t*	node );
+  node_t*	node )
+{
+    fixed_t	dx;
+    fixed_t	dy;
+
+    if (!node->dx)
+    {
+	if (x <= node->x)
+	    return node->dy > 0;
+	return node->dy < 0;
+    }
+    if (!node->dy)
+    {
+	if (y <= node->y)
+	    return node->dx < 0;
+	return node->dx > 0;
+    }
+
+    dx = (x - node->x);
+    dy = (y - node->y);
+
+    // Try to quickly decide by looking at sign bits.
+    if ( (node->dy ^ node->dx ^ dx ^ dy)&0x80000000 )
+    {
+	if  ( (node->dy ^ dx) & 0x80000000 )
+	    return 1;
+	return 0;
+    }
+
+    {
+	fixed_t left  = FixedMul ( node->dy>>FRACBITS , dx );
+	fixed_t right = FixedMul ( dy , node->dx>>FRACBITS );
+	return (right < left) ? 0 : 1;
+    }
+}
 
 int
 R_PointOnSegSide

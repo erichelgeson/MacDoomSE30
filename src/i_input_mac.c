@@ -102,8 +102,8 @@ static const struct { int macKey; int doomKey; } kKeyTable[] = {
     {0x3B, KEY_RCTRL},     /* Left Ctrl = fire */
     {0x38, KEY_RSHIFT},    /* Left Shift = run */
     {0x3A, KEY_RALT},      /* Left Option = strafe */
-    {0x12, '1'}, {0x13, '2'}, {0x14, '3'}, {0x15, '4'},
-    {0x17, '5'}, {0x16, '6'}, {0x1A, '7'}, {0x1C, '8'},
+    {0x1D, '0'}, {0x12, '1'}, {0x13, '2'}, {0x14, '3'}, {0x15, '4'},
+    {0x17, '5'}, {0x16, '6'}, {0x1A, '7'}, {0x1C, '8'}, {0x19, '9'},
     {0x2B, ','}, {0x2F, '.'},
     {0x7A, KEY_F1},  {0x78, KEY_F2},  {0x63, KEY_F3},  {0x76, KEY_F4},
     /* 0x60 (F5) reserved for sound test ladder */

@@ -609,6 +609,10 @@ void R_RenderBSPNode (int bspnum)
     node_t*	bsp;
     int		side;
 
+    // Phase 2B: early-out when solidsegs covers the full screen width
+    if (solidsegs[0].last >= viewwidth - 1)
+	return;
+
     // Found a subsector?
     if (bspnum & NF_SUBSECTOR)
     {

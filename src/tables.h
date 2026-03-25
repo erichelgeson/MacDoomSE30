@@ -86,10 +86,18 @@ extern angle_t		tantoangle[SLOPERANGE+1];
 
 // Utility function,
 //  called by R_PointToAngle.
-int
+// Phase 4B: inlined to eliminate JSR/RTS overhead (~80 cycles × 8 calls per R_PointToAngle)
+static inline int
 SlopeDiv
 ( unsigned	num,
-  unsigned	den);
+  unsigned	den)
+{
+    unsigned ans;
+    if (den < 512)
+	return SLOPERANGE;
+    ans = (num<<3)/(den>>8);
+    return ans <= SLOPERANGE ? ans : SLOPERANGE;
+}
 
 
 #endif

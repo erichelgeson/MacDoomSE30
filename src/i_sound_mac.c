@@ -102,6 +102,9 @@ void I_InitSound(void)
     /* Apply Doom's current sfx volume setting */
     I_ApplySfxVolume();
 
+    /* Phase 1B: Disable system beep to prevent alert sound interrupts */
+    SndSetSysBeepState(0);  /* 0 = sysBeepDisable */
+
     doom_log("I_InitSound: %d channels allocated (wanted %d)\r",
              mac_num_channels, want);
 }
@@ -136,6 +139,9 @@ void I_ShutdownSound(void)
         SetDefaultOutputVolume(saved_output_vol);
         saved_output_vol = -1;
     }
+
+    /* Restore system beep */
+    SndSetSysBeepState(1);  /* 1 = sysBeepEnable */
 }
 
 void I_SetChannels(void) { }
@@ -676,3 +682,21 @@ void I_PlaySong(int handle, int looping)
 
 void I_StopSong(int handle) { (void)handle; }
 void I_UnRegisterSong(int handle) { (void)handle; }
+
+/* Phase 1D: Query Sound Manager CPU load for profiling.
+ * SMStatus struct not in Retro68 headers — define manually per IM:Sound. */
+typedef struct {
+    short smMaxCPULoad;
+    short smNumChannels;
+    short smCurCPULoad;
+} SMStatusRec;
+
+int I_GetSoundCPULoad(void)
+{
+    SMStatusRec st;
+    OSErr err;
+    /* Always query — Sound Manager runs at OS level regardless of opt_sound */
+    err = SndManagerStatus(sizeof(st), (SMStatusPtr)&st);
+    if (err != noErr) return -1;
+    return (int)st.smCurCPULoad;
+}

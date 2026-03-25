@@ -45,7 +45,8 @@
       "Bash(xargs ls:*)",
       "Bash(SNOW_NEW=/Users/michaeldiaz/develop/doom_se30/emulator/shared/doom_log.txt __NEW_LINE_2ab1d0608db1ee22__ echo \"=== Snow v2 \\(fixed BSP\\) ===\" cat \"$SNOW_NEW\")",
       "Bash(ls /Users/michaeldiaz/develop/doom_se30/*.md /Users/michaeldiaz/develop/doom_se30/src/*.md /Users/michaeldiaz/develop/doom_se30/docs/*.md 2>/dev/null)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "WebSearch"
     ]
   }
 }
