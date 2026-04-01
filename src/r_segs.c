@@ -248,6 +248,7 @@ R_RenderMaskedSegRange
 	    }
 
 	    dc_x = l_dc_x;
+	    spryscale = l_spryscale;  /* write back — R_DrawMaskedColumn reads global */
 	    sprtopscreen = l_centeryfrac - FixedMul(dc_texturemid, l_spryscale);
 	    /* Linear interpolation replaces per-column 32-bit divide */
 	    dc_iscale = mpr_iscale;

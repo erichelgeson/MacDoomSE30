@@ -19,7 +19,7 @@
 - [ ] **Sky fog** (nice-to-have) — sky should be immune to fog; currently shows solidfloor fill at fog distance. Two approaches tried and reverted. Root cause unknown. Could slip to post-1.0.
 - [ ] **Keep optimizing** for more FPS esp to bring the low end up.  See docs OPTIMIZATION_IDEAS.md and PERFORMANCE_HISTORY.md for extensive records.
 - [ ] **Fix sky clipping** rendering bugs when OPTION "solid fill ceiling/floor" texture rendering is set to OFF
-- [ ] **Check transparent wall texture rendering bug** in E1M1 — may be drawing incorrectly
+- [x] ~~**Check transparent wall texture rendering bug** in E1M1~~ — Fixed 2026-03-31: cached `spryscale` local in `R_RenderMaskedSegRange` wasn't written back to global before `R_DrawMaskedColumn` call
 
 ### Options GUI
 - [ ] **Expose tunable options in-game** — monster_throttle_dist, fog_scale, solidfloor_gray, halfline, etc. Currently only settable via doom.cfg or hotkeys.
@@ -30,6 +30,9 @@
 
 ### Save/Load
 - [ ] **Load game crashes** — menu Load Game causes a crash. Save game may or may not work.
+
+### HUD
+- [ ] **HUD area flashes black** — when view size is maxed out (full screen, no HUD), the status bar region flashes to black and back during gameplay. Timed with HUD redraw (periodic updates + triggered changes like firing a gun). Holding fire makes the region permanently black.
 
 ### Stability / Exit
 - [x] ~~**Missing WAD detection**~~ — shows message on bg_window + waits for click/key, then clean exit; done.

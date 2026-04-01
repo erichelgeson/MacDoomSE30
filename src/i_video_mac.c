@@ -863,7 +863,7 @@ void I_FinishUpdate(void)
          * the screen, only re-blit when ST_Drawer actually drew. --- */
         {
             extern int sbar_dirty;
-            if (vy1 < sbar0 || do_border || sbar_dirty) {
+            if (vy1 < sbar0 && (do_border || sbar_dirty)) {
                 sbar_dirty = 0;
                 for (y = sbar0; y < SCREENHEIGHT; y++) {
                     const byte    *sr  = src + y * SCREENWIDTH;
