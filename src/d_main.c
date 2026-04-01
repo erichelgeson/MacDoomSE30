@@ -133,6 +133,7 @@ int monster_throttle_dist = 1024;
  * farther than this (map units).  0 = no limit (vanilla behavior).
  * 1600 ≈ ~50m, well beyond typical engagement range. */
 int monster_sight_dist = 1600;
+int map_survey = 0;            /* -mapsurvey: auto-warp through all maps, log zone mem */
 
 extern int detailLevel;   /* defined in m_menu.c */
 
@@ -1082,6 +1083,7 @@ void D_DoomMain (void)
     if (M_CheckParm ("-scale2x"))   opt_scale2x       = 1;
     if (M_CheckParm ("-directfb"))  opt_directfb      = 1;
     if (M_CheckParm ("-sound"))    opt_sound         = 1;
+    if (M_CheckParm ("-mapsurvey")) { map_survey = 1; autostart = true; }
     if (M_CheckParm ("-altdeath"))
 	deathmatch = 2;
     else if (M_CheckParm ("-deathmatch"))

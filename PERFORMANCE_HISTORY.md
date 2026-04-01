@@ -10,6 +10,45 @@ Newest entries at top. Add new entries here after each significant change.
 
 ---
 
+## 2026-03-31 — Zone Memory Usage Survey (doom1.wad)
+**Emulator: Snow (debug build)**
+**Zone heap: 8 MB (8192 KB)**
+
+Measured `Z_FreeMemory()` after each level load across all 27 maps (3 episodes × 9 maps).
+
+| Map | Free (KB) | Used (KB) | Used % |
+|-----|-----------|-----------|--------|
+| E1M1 | 7782 | 410 | 5.0% |
+| E1M2 | 7637 | 555 | 6.8% |
+| E1M3 | 7644 | 548 | 6.7% |
+| E1M4 | 7705 | 487 | 5.9% |
+| E1M5 | 7708 | 484 | 5.9% |
+| E1M6 | 7571 | 621 | 7.6% |
+| E1M7 | 7671 | 521 | 6.4% |
+| E1M8 | 7743 | 449 | 5.5% |
+| E2M1 | 7793 | 399 | 4.9% |
+| E2M2 | 7540 | 652 | 8.0% |
+| E2M3 | 7687 | 505 | 6.2% |
+| E2M4 | 7650 | 542 | 6.6% |
+| E2M5 | 7596 | 596 | 7.3% |
+| E2M6 | 7654 | 538 | 6.6% |
+| E2M7 | 7530 | 662 | 8.1% |
+| E2M8 | 7815 | 377 | 4.6% |
+| E2M9 | 7862 | 330 | 4.0% |
+| E3M1 | 7844 | 348 | 4.2% |
+| E3M2 | 7767 | 425 | 5.2% |
+| E3M3 | 7654 | 538 | 6.6% |
+| E3M4 | 7596 | 596 | 7.3% |
+| E3M5 | 7589 | 603 | 7.4% |
+| E3M6 | 7689 | 503 | 6.1% |
+| E3M7 | 7696 | 496 | 6.1% |
+| E3M8 | 7860 | 332 | 4.1% |
+| E3M9 | 7760 | 432 | 5.3% |
+
+**Peak: E2M7 at 662 KB (8.1% of 8 MB zone).** All maps well under 1 MB. A 4 MB zone would have ample headroom for doom1.wad.
+
+---
+
 ## 2026-03-29 — Monster Sight Distance Culling (p_enemy.c)
 **Emulator: Snow (debug build)**
 **Config: detailLevel=2 halfline=1 affinetex=1 solidfloor=1 solidfloor_gray=4**

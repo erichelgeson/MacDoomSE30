@@ -733,6 +733,31 @@ void G_Ticker (void)
 	ST_Ticker ();
 	AM_Ticker ();
 	HU_Ticker ();
+
+	/* -mapsurvey: auto-advance to next map after 20 tics */
+	{
+	    extern int map_survey;
+	    if (map_survey && gametic == levelstarttic + 20)
+	    {
+		if (gamemode == commercial)
+		{
+		    if (gamemap < 32)
+			G_DeferedInitNew(gameskill, 1, gamemap + 1);
+		    else
+			I_Quit();
+		}
+		else
+		{
+		    /* registered/retail: E1M1..E1M9, E2M1..E2M9, E3M1..E3M9 */
+		    if (gamemap < 9)
+			G_DeferedInitNew(gameskill, gameepisode, gamemap + 1);
+		    else if (gameepisode < 3)
+			G_DeferedInitNew(gameskill, gameepisode + 1, 1);
+		    else
+			I_Quit();
+		}
+	    }
+	}
 	break;
 	 
       case GS_INTERMISSION: 

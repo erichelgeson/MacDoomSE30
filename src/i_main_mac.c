@@ -346,7 +346,7 @@ static pascal Boolean SplashFilterProc(DialogPtr dlg, EventRecord *event, short 
     return false;
 }
 
-static char *mac_argv[6] = { "DoomSE30", "-playdemo", "pl20ben" };
+static char *mac_argv[8] = { "DoomSE30", "-playdemo", "pl20ben" };
 static WindowPtr bg_window = nil;  /* fullscreen black background window */
 
 void I_NoWadAlert(void)
@@ -550,6 +550,7 @@ int main(void)
         myargc += 2;
         doom_log("PWAD selected: %s\r", s_pwad_name);
     }
+
 
     /* Doom's real entry point — setjmp here so I_Quit()'s longjmp lands back */
     if (setjmp(doom_quit_jmp) == 0)

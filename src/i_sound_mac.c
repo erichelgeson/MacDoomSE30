@@ -481,14 +481,11 @@ int I_StartSound(int id, int vol, int sep, int pitch, int priority)
 
     sfx = &S_sfx[id];
 
-    /* Ensure sound data is cached */
-    if (!sfx->data) {
-        if (!I_CacheSfx(id)) {
-            return -1;
-        }
-    }
-
-    raw = (byte *)sfx->data;
+    /* Always re-fetch via W_CacheLumpNum — sfx->data may be a stale PU_CACHE
+       pointer that the zone purged and reused since it was last loaded. */
+    raw = (byte *)W_CacheLumpNum(sfx->lumpnum, PU_CACHE);
+    if (!raw) return -1;
+    sfx->data = raw;
 
     /* Find a free channel — drop if all busy (no stealing/queuing) */
     oldest = -1;
@@ -589,6 +586,15 @@ void I_StopSound(int handle)
         return;
 
     mc->playing = false;
+    mc->hw_busy = false;
+
+    /* Flush the SndChannel immediately before freeing any handles/zone blocks.
+       SndDisposeChannel(true) stops DMA mid-sample — safe to free after this. */
+    if (mc->chan) {
+        SndDisposeChannel(mc->chan, true);
+        mc->chan = NULL;
+        SndNewChannel(&mc->chan, sampledSynth, 0x80, snd_callback_upp);
+    }
 
     if (mc->snd_handle) {
         DisposeHandle(mc->snd_handle);

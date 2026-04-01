@@ -688,7 +688,11 @@ P_SetupLevel
     if (precache)
 	R_PrecacheLevel ();
 
-    //printf ("free memory: 0x%x\n", Z_FreeMemory());
+    {
+	extern void doom_log(const char *fmt, ...);
+	doom_log("ZONE %s: free=%ld KB\r",
+		 lumpname, (long)Z_FreeMemory() / 1024);
+    }
 
 }
 
