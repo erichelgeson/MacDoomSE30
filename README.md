@@ -72,23 +72,23 @@ To use a pwad:
   3. Don't forget that these WAD files target specific level(s) - and if that level isn't the first level (eg E1M1) then you'll need to IDCLEV your way to the correct level.  
 
 Release Notes
-• 1.0.0
- - Initial public release
- - Fixed transparency rendering bug
- - Reduced RAM requirements to more realistic yet still conservative
-• 1.0b5pre
-- Support for WAD files (PWADs)
-- Optimizations targeting SE/30 68030 processor cache and registers
-• 1.0b4
-- Sound functionality enabled
-• 1.0b3
-- Updated Options screen to enable modification of Half Line and Affine options
+- 1.0.0
+  - Initial public release
+  - Fixed transparency rendering bug
+  - Reduced RAM requirements to more realistic yet still conservative
+- 1.0b5pre
+  - Support for WAD files (PWADs)
+  - Optimizations targeting SE/30 68030 processor cache and registers
+- 1.0b4
+  - Sound functionality enabled
+- 1.0b3
+  - Updated Options screen to enable modification of Half Line and Affine options
   - Half line OFF is highly recommended  for Full Screen to avoid really low-quality visuals
-• 1.0b2
-- Actual Initial public release
-- Added missing wad file check
-- Updated to better doom.cfg included distro config
+- 1.0b2
+  - Actual Initial public release
+  - Added missing wad file check
+  - Updated to better doom.cfg included distro config
 • 1.0b1
-- Initial public release
-- 'Playable' on the SE/30 with Default options settings
-- No sounds yet
+  - Initial public release
+  - 'Playable' on the SE/30 with Default options settings
+  - No sounds yet
