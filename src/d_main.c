@@ -417,12 +417,25 @@ void D_Display (void)
      * I_FinishUpdate applies menu_overlay_buf as solid white over the full screen. */
     if (menuactive)
     {
-	extern byte *menu_overlay_buf;
-	byte *saved = screens[0];
-	memset(menu_overlay_buf, 0, SCREENWIDTH * SCREENHEIGHT);
-	screens[0] = menu_overlay_buf;
-	{ long _mn = I_GetMacTick(); M_Drawer(); prof_hud_mn += I_GetMacTick() - _mn; }
-	screens[0] = saved;
+	extern int  g_color_depth;
+	if (g_color_depth >= 8)
+	{
+	    /* Color mode: M_Drawer writes directly to screens[0] (the game frame
+	     * is already there).  No redirect needed — I_FinishUpdate blits
+	     * screens[0] as-is, so menu patches land on screen naturally. */
+	    { long _mn = I_GetMacTick(); M_Drawer(); prof_hud_mn += I_GetMacTick() - _mn; }
+	}
+	else
+	{
+	    /* Mono path: redirect M_Drawer to menu_overlay_buf so I_FinishUpdate
+	     * can composite it as solid white over the 1-bit framebuffer. */
+	    extern byte *menu_overlay_buf;
+	    byte *saved = screens[0];
+	    memset(menu_overlay_buf, 0, SCREENWIDTH * SCREENHEIGHT);
+	    screens[0] = menu_overlay_buf;
+	    { long _mn = I_GetMacTick(); M_Drawer(); prof_hud_mn += I_GetMacTick() - _mn; }
+	    screens[0] = saved;
+	}
     }
     NetUpdate ();         // send out any new accumulation
 
@@ -458,7 +471,7 @@ void D_Display (void)
 	done = wipe_ScreenWipe(wipe_Melt
 			       , 0, 0, SCREENWIDTH, SCREENHEIGHT, tics);
 	I_UpdateNoBlit ();
-	if (menuactive) { extern byte *menu_overlay_buf; byte *saved = screens[0]; memset(menu_overlay_buf, 0, SCREENWIDTH * SCREENHEIGHT); screens[0] = menu_overlay_buf; M_Drawer (); screens[0] = saved; }  // menu overlay
+	if (menuactive) { extern int g_color_depth; if (g_color_depth >= 8) { M_Drawer(); } else { extern byte *menu_overlay_buf; byte *saved = screens[0]; memset(menu_overlay_buf, 0, SCREENWIDTH * SCREENHEIGHT); screens[0] = menu_overlay_buf; M_Drawer (); screens[0] = saved; } }  // menu overlay
 	I_FinishUpdate ();                      // page flip or blit buffer
     } while (!done);
 
@@ -1295,6 +1308,27 @@ void D_DoomMain (void)
     doom_log ("CHKPT: M_LoadDefaults done\r");
     doom_log("D_DoomMain: opt_halfline=%d opt_affinetex=%d opt_solidfloor=%d solidfloor_gray=%d detailLevel=%d opt_scale2x=%d opt_directfb=%d opt_sound=%d monster_throttle=%d monster_sight=%d\r",
              opt_halfline, opt_affine_texcol, opt_solidfloor, solidfloor_gray, detailLevel, opt_scale2x, opt_directfb, opt_sound, monster_throttle_dist, monster_sight_dist);
+
+    /* Color display: disable SE/30-specific 1-bit optimizations.
+     * These opts either do nothing useful on 8-bit output (halfline, scale2x)
+     * or would produce incorrect results (solidfloor draws 1-bit patterns,
+     * fog_scale culls sprites based on a mono rendering distance heuristic).
+     * Override whatever doom.cfg loaded — color mode always renders clean. */
+    {
+        extern int g_color_depth;
+        if (g_color_depth >= 8) {
+            opt_halfline      = 0;
+            opt_affine_texcol = 0;
+            opt_solidfloor    = 0;
+            opt_scale2x       = 0;
+            fog_scale         = 0;
+            /* QUAD (2) and MUSH (3) have no 8-bit renderers yet — clamp to LOW.
+             * HIGH (0) and LOW (1) pass through unchanged. */
+            if (detailLevel > 1) detailLevel = 1;
+            doom_log("D_DoomMain: color display (%d-bit), mono opts disabled, detailLevel=%d\r",
+                     g_color_depth, detailLevel);
+        }
+    }
 
     printf ("Z_Init: Init zone memory allocation daemon. \n");
     doom_log ("CHKPT: entering Z_Init\n");

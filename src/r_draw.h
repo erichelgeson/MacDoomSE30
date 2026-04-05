@@ -45,6 +45,8 @@ extern byte*		dc_source;
 //  here.
 void 	R_DrawColumn (void);
 void 	R_DrawColumnLow (void);
+void    R_DrawColumnQuadColor (void); /* 8-bit color, 4-wide, detailshift=2 */
+void    R_DrawColumnMushColor (void); /* 8-bit color, 8-wide, detailshift=3 */
 
 // Direct 1-bit mono renderers (Phase 4 — write straight to framebuffer).
 void	R_DrawColumn_Mono (void);
@@ -98,6 +100,8 @@ void 	R_DrawSpan (void);
 
 // Low resolution mode, 160x200?
 void 	R_DrawSpanLow (void);
+void    R_DrawSpanQuadColor (void);   /* 8-bit color, 4-wide, detailshift=2 */
+void    R_DrawSpanMushColor (void);   /* 8-bit color, 8-wide, detailshift=3 */
 
 
 void

@@ -14,6 +14,10 @@
 ### Sound
 - [ ] **Activate sound** - Definitely make it optional as FPS hit will likely be there;  Track its impact on performance.
 
+### Performance / Hardware
+- [ ] **Ensure dcache enabled on 68040 systems** — Quadra 650 timedemo (2026-04-05) showed `CACR=0x80008000` (icache ON, dcache OFF). dcache off measurably hurts column renderer texture fetches. Need to enable dcache in `I_Init` on 68040; SE/30 (68030) has no dcache so this is 040-only. Check `SwapDataCache` logic — it may be intentionally disabled for compatibility.
+- [ ] **Test on real Mac IIci or Quadra 650 hardware** — Snow emulator crashes on Quadra 650 with a corrupt Level 2 interrupt dispatch chain entry (function ptr `$00004D0A` at `$3388+8`). Crash is 100% reproducible, happens in both mono and color modes, debug and release builds, with sound off. Root cause unknown — HideCursor, _HWPriv, SndNewChannel all ruled out. Likely a Snow emulator bug (Basilisk II/SE/30 unaffected). Needs verification on real hardware to determine if it's emulator-only.
+
 ### Rendering
 - [x] ~~**2× pixel scale**~~ — Implemented 2026-03-14.
 - [ ] **Sky fog** (nice-to-have) — sky should be immune to fog; currently shows solidfloor fill at fog distance. Two approaches tried and reverted. Root cause unknown. Could slip to post-1.0.

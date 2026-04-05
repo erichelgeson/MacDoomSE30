@@ -604,13 +604,14 @@ void R_ExecuteSetViewSize (void)
     centeryfrac = centery<<FRACBITS;
     projection = centerxfrac;
 
-    /* When the menu is active, fall back to 8-bit renderers so the entire
-     * frame is composited into screens[0] first, then blitted to the
-     * framebuffer in one pass.  This eliminates the menu overlay flicker
-     * caused by the CRT scanning over partially-rendered direct-draw frames. */
+    /* Use 8-bit renderers when the menu is active (avoids flicker from
+     * partial direct-draw frames) OR when the display is color/grayscale
+     * (screens[0] is the entire frame; I_FinishUpdate memcpys it to the
+     * hardware framebuffer without any 1-bit conversion). */
     {
 	extern boolean menuactive;
-	if (menuactive)
+	extern int     g_color_depth;
+	if (menuactive || g_color_depth >= 8)
 	{
 	    /* 8-bit path: renders to screens[0]; I_FinishUpdate does full blit */
 	    if (!detailshift)
@@ -620,12 +621,28 @@ void R_ExecuteSetViewSize (void)
 		transcolfunc = R_DrawTranslatedColumn;
 		spanfunc     = R_DrawSpan;
 	    }
-	    else
+	    else if (detailshift == 1)
 	    {
 		colfunc    = basecolfunc = R_DrawColumnLow;
 		fuzzcolfunc  = R_DrawFuzzColumn;
 		transcolfunc = R_DrawTranslatedColumn;
 		spanfunc     = R_DrawSpanLow;
+	    }
+	    else if (detailshift == 2)
+	    {
+		/* QUAD: 4-wide renderers */
+		colfunc    = basecolfunc = R_DrawColumnQuadColor;
+		fuzzcolfunc  = R_DrawFuzzColumn;
+		transcolfunc = R_DrawTranslatedColumn;
+		spanfunc     = R_DrawSpanQuadColor;
+	    }
+	    else
+	    {
+		/* MUSH (detailshift=3): 8-wide renderers */
+		colfunc    = basecolfunc = R_DrawColumnMushColor;
+		fuzzcolfunc  = R_DrawFuzzColumn;
+		transcolfunc = R_DrawTranslatedColumn;
+		spanfunc     = R_DrawSpanMushColor;
 	    }
 	}
 	else if (!detailshift)
@@ -1039,4 +1056,6 @@ void R_RenderPlayerView (player_t* player)
 	    probe_a_logged = 1;
 	}
     }
+    /* Crash bisect: confirm render completed before IFU */
+    if (menuactive) { doom_log("RPV_DONE ma=1\r"); doom_log_flush(); }
 }

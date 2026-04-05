@@ -511,11 +511,36 @@ int main(void)
         ClosePort(&screenPort);
     }
 
+    /* Detect display depth for color support.
+     * GetMainDevice() returns the main screen GDevice; pixelSize tells us
+     * whether it's a 1-bit mono screen (SE/30) or an 8-bit color/gray Mac.
+     * Must happen before I_InitGraphics (which uses g_color_depth to branch)
+     * and before window creation (color needs NewCWindow, not NewWindow). */
+    {
+        extern int g_color_depth;
+        GDHandle gd = GetMainDevice();
+        if (gd && *gd) {
+            int depth = (int)(*(*gd)->gdPMap)->pixelSize;
+            doom_log("main: screen depth=%d (%s)\r",
+                     depth, depth >= 8 ? "color/gray" : "mono");
+            if (depth >= 8) {
+                g_color_depth = depth;
+            }
+        } else {
+            doom_log("main: GetMainDevice failed, assuming mono\r");
+        }
+    }
+
     /* Open a fullscreen black window to give the game a clean black surround
      * and to ensure the Window Manager repaints the desktop cleanly on exit. */
-    
-    bg_window = NewWindow(nil, &qd.screenBits.bounds, "\p", true,
-                          plainDBox, (WindowPtr)-1, false, 0);
+    {
+        extern int g_color_depth;
+        bg_window = (g_color_depth >= 8)
+            ? NewCWindow(nil, &qd.screenBits.bounds, "\p", true,
+                         plainDBox, (WindowPtr)-1, false, 0)
+            : NewWindow (nil, &qd.screenBits.bounds, "\p", true,
+                         plainDBox, (WindowPtr)-1, false, 0);
+    }
     if (bg_window != nil)
     {
         Rect local_r;
@@ -557,11 +582,17 @@ int main(void)
         D_DoomMain();
 
     /* I_Quit longjmp'd here (or D_DoomMain returned) — tear down and exit cleanly */
-    /* Restore menu bar before handing back to Finder */
+    doom_log("main: exit sequence start\r"); doom_log_flush();
     *(short *)0x0BAA = 20;
+    doom_log("main: DrawMenuBar\r"); doom_log_flush();
     DrawMenuBar();
-    if (bg_window != nil)
+    doom_log("main: DrawMenuBar done\r"); doom_log_flush();
+    if (bg_window != nil) {
+        doom_log("main: DisposeWindow\r"); doom_log_flush();
         DisposeWindow(bg_window);
+        doom_log("main: DisposeWindow done\r"); doom_log_flush();
+    }
+    doom_log("main: ExitToShell\r"); doom_log_flush();
     ExitToShell();
     return 0;
 }

@@ -30,6 +30,15 @@ int             fb_mono_rowbytes = 0;     /* bytes per row in framebuffer */
 int             fb_mono_xoff     = 0;     /* (fb_width - SCREENWIDTH) / 2 */
 int             fb_mono_yoff     = 0;     /* (fb_height - SCREENHEIGHT) / 2 */
 
+/* Color display support — depth detected in i_main_mac.c before window creation.
+ * g_color_depth = 1: 1-bit mono (SE/30, Classic, Plus).
+ * g_color_depth = 8: 8-bit color or grayscale (IIci, Quadra, LC 520, etc.).  */
+int  g_color_depth     = 1;
+static byte *fb_color_base     = NULL;
+static int   fb_color_rowbytes = 0;
+static int   fb_color_xoff     = 0;
+static int   fb_color_yoff     = 0;
+
 /* Grayscale palette: maps Doom's 256-color palette to 0-255 grayscale.
  * Non-static so r_draw.c can use it for direct 1-bit rendering.
  * Values are gamma-corrected (dither_gamma applied). */
@@ -427,6 +436,46 @@ void I_InitGraphics(void)
 {
     I_LogCacheState();
 
+    if (g_color_depth >= 8) {
+        /* Color/grayscale display path.
+         * Get the hardware framebuffer from GetMainDevice() → gdPMap instead
+         * of qd.screenBits, which is always a 1-bit bitmap.  SetEntries will
+         * program this device's CLUT; I_FinishUpdate blits screens[0] here. */
+        GDHandle     gd  = GetMainDevice();
+        PixMapHandle pm  = (*gd)->gdPMap;
+        int screen_w = (*pm)->bounds.right  - (*pm)->bounds.left;
+        int screen_h = (*pm)->bounds.bottom - (*pm)->bounds.top;
+        fb_color_base      = (byte *)(*pm)->baseAddr;
+        fb_color_rowbytes  = (*pm)->rowBytes & 0x3FFF; /* high bits are flags */
+        fb_color_xoff      = (screen_w - SCREENWIDTH)  / 2;
+        fb_color_yoff      = (screen_h - SCREENHEIGHT) / 2;
+        doom_log("I_InitGraphics: color %dx%d rb=%d xoff=%d yoff=%d depth=%d\r",
+                 screen_w, screen_h, fb_color_rowbytes,
+                 fb_color_xoff, fb_color_yoff, g_color_depth);
+        /* Heap boundary check: is fb_color_base inside the app heap?
+         * ApplZone() = heap start, GetApplLimit() = heap end.
+         * If fb_color_base falls in [ApplZone, GetApplLimit), we're writing
+         * into heap memory every frame — root cause of corruption on exit. */
+        /* Low-memory globals: ApplZone=0x02AA (heap start), ApplLimit=0x0130 (heap end) */
+        doom_log("I_InitGraphics: fb_color_base=%p ApplZone=%p ApplLimit=%p\r",
+                 (void *)fb_color_base,
+                 (void *)(*(long *)0x02AA),
+                 (void *)(*(long *)0x0130));
+        HideCursor();
+        screens[0] = (byte *)malloc(SCREENWIDTH * SCREENHEIGHT);
+        if (!screens[0])
+            I_Error("I_InitGraphics: failed to allocate screen buffer");
+        memset(screens[0], 0, SCREENWIDTH * SCREENHEIGHT);
+        menu_overlay_buf = (byte *)malloc(SCREENWIDTH * SCREENHEIGHT);
+        if (!menu_overlay_buf)
+            I_Error("I_InitGraphics: failed to allocate overlay buffer");
+        memset(menu_overlay_buf, 0, SCREENWIDTH * SCREENHEIGHT);
+        /* No off-screen 1-bit buffer, no mono_colormaps, no Bayer dither.
+         * fb_mono_base stays NULL → is_direct stays false → renderers always
+         * write to screens[0] (via 8-bit colfunc), which we then memcpy out. */
+        return;
+    }
+
     BitMap *screen = &qd.screenBits;
     fb_mono_base     = (byte *)screen->baseAddr;
     fb_mono_rowbytes = screen->rowBytes;
@@ -556,6 +605,23 @@ void I_SetPalette(byte *palette)
     /* Save palette for runtime rebuilds (hotkey param changes). */
     for (i = 0; i < 768; i++) saved_palette[i] = palette[i];
     palette_valid = 1;
+
+    if (g_color_depth >= 8) {
+        /* Color path: program hardware CLUT so palette index N displays as
+         * Doom's actual RGB color N.  SetEntries writes directly to the video
+         * card — no per-frame cost once the CLUT is loaded.
+         * RGBColor channels are 16-bit (0-65535); multiply 8-bit values by 257
+         * (= 0x101) to map 0→0 and 255→65535 exactly. */
+        static ColorSpec cs[256];
+        for (i = 0; i < 256; i++) {
+            cs[i].value        = (INTEGER)i;
+            cs[i].rgb.red      = (unsigned short)palette[i*3+0] * 257u;
+            cs[i].rgb.green    = (unsigned short)palette[i*3+1] * 257u;
+            cs[i].rgb.blue     = (unsigned short)palette[i*3+2] * 257u;
+        }
+        SetEntries(0, 255, cs);
+        return;
+    }
 
     for (i = 0; i < 256; i++) {
         int r = palette[i * 3 + 0];
@@ -688,6 +754,25 @@ static inline unsigned char blit8_menu(const byte *src)
  */
 void I_FinishUpdate(void)
 {
+    if (g_color_depth >= 8) {
+        /* Color/grayscale fast path: the 8-bit renderers already wrote correct
+         * palette indices into screens[0].  SetEntries mapped those indices to
+         * real RGB in the CLUT.  Just memcpy each row to the hardware FB.
+         * No dithering, no colormaps, no is_direct complexity. */
+        byte *src = screens[0];
+        int y;
+        for (y = 0; y < SCREENHEIGHT; y++)
+            memcpy(fb_color_base
+                   + (y + fb_color_yoff) * fb_color_rowbytes + fb_color_xoff,
+                   src + y * SCREENWIDTH, SCREENWIDTH);
+
+        return;
+    }
+
+    /* Crash bisect: confirm IFU reached */
+    { extern boolean menuactive;
+      if (menuactive) { doom_log("IFU_START ma=1\r"); doom_log_flush(); } }
+
     /* Rebuild mono_colormaps at most once per frame. */
     if (mono_dirty) { I_BuildMonoColormaps(); mono_dirty = 0; }
 
@@ -859,11 +944,13 @@ void I_FinishUpdate(void)
         }
 
         /* --- Region 4: status bar rows.  Always blit when view doesn't
-         * cover sbar (vy1 < sbar0) or border forced.  When view fills
-         * the screen, only re-blit when ST_Drawer actually drew. --- */
+         * cover sbar (vy1 <= sbar0) or border forced.  When view fills
+         * the screen fully (vy1 > sbar0), only re-blit when ST_Drawer drew.
+         * Note: vy1 == sbar0 at screenblocks=10 (view bottom flush with sbar
+         * top) — must use <= not < or the sbar never blits at that size. --- */
         {
             extern int sbar_dirty;
-            if (vy1 < sbar0 && (do_border || sbar_dirty)) {
+            if (vy1 <= sbar0 && (do_border || sbar_dirty)) {
                 sbar_dirty = 0;
                 for (y = sbar0; y < SCREENHEIGHT; y++) {
                     const byte    *sr  = src + y * SCREENWIDTH;

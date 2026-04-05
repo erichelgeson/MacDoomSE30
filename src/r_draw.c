@@ -252,10 +252,12 @@ void R_DrawColumnLow (void)
     //	dccount++; 
 #endif 
     // Blocky mode, need to multiply by 2.
-    dc_x <<= 1;
-    
-    dest = ylookup[dc_yl] + columnofs[dc_x];
-    dest2 = ylookup[dc_yl] + columnofs[dc_x+1];
+    // Local avoids clobbering global dc_x — R_DrawMaskedColumn calls colfunc
+    // once per post; a doubled global would crash on the second post.
+    {
+    int x2 = dc_x << 1;
+    dest  = ylookup[dc_yl] + columnofs[x2];
+    dest2 = ylookup[dc_yl] + columnofs[x2+1];
     
     fracstep = dc_iscale; 
     frac = dc_texturemid + (dc_yl-centery)*fracstep;
@@ -269,6 +271,7 @@ void R_DrawColumnLow (void)
 	frac += fracstep; 
 
     } while (count--);
+    } /* end x2 block */
 }
 
 
@@ -683,13 +686,13 @@ void R_DrawSpanLow (void)
     yfrac = ds_yfrac; 
 
     // Blocky mode, need to multiply by 2.
+    // count must be saved BEFORE doubling — after doubling, ds_x2-ds_x1 is
+    // 2*(x2-x1) and the loop would run twice as many iterations as intended,
+    // writing 4*(x2-x1)+2 pixels into a (x2-x1+1)*2 pixel span → row overrun.
+    count = ds_x2 - ds_x1;
     ds_x1 <<= 1;
     ds_x2 <<= 1;
-    
     dest = ylookup[ds_y] + columnofs[ds_x1];
-  
-    
-    count = ds_x2 - ds_x1; 
     do 
     { 
 	spot = ((yfrac>>(16-6))&(63*64)) + ((xfrac>>16)&63);
@@ -2057,5 +2060,122 @@ void R_DrawSpanMushLow_Mono(void)
         xfrac  += ds_xstep;
         yfrac  += ds_ystep;
         half_x++;
+    } while (count--);
+}
+
+/*
+ * R_DrawColumnQuadColor — 8-bit color, 4-pixels-wide per logical column.
+ * Used in QUAD detail mode (detailshift=2) on color displays.
+ * dc_x is 0..(viewwidth-1)=0..79.  Physical pixels: dc_x*4..dc_x*4+3.
+ * Do NOT clobber global dc_x (R_DrawMaskedColumn calls colfunc per post).
+ */
+void R_DrawColumnQuadColor(void)
+{
+    int count = dc_yh - dc_yl;
+    if (count < 0) return;
+
+    {
+    int     x4    = dc_x << 2;
+    byte   *dest  = ylookup[dc_yl] + columnofs[x4];
+    byte   *dest2 = ylookup[dc_yl] + columnofs[x4+1];
+    byte   *dest3 = ylookup[dc_yl] + columnofs[x4+2];
+    byte   *dest4 = ylookup[dc_yl] + columnofs[x4+3];
+    fixed_t fracstep = dc_iscale;
+    fixed_t frac     = dc_texturemid + (dc_yl - centery) * fracstep;
+
+    do {
+        byte v = dc_colormap[dc_source[(frac>>FRACBITS)&127]];
+        *dest4 = *dest3 = *dest2 = *dest = v;
+        dest  += SCREENWIDTH; dest2 += SCREENWIDTH;
+        dest3 += SCREENWIDTH; dest4 += SCREENWIDTH;
+        frac  += fracstep;
+    } while (count--);
+    }
+}
+
+/*
+ * R_DrawSpanQuadColor — 8-bit color, 4-pixels-wide per logical span column.
+ * count saved BEFORE quadrupling (same fix as R_DrawSpanLow).
+ */
+void R_DrawSpanQuadColor(void)
+{
+    fixed_t xfrac = ds_xfrac;
+    fixed_t yfrac = ds_yfrac;
+    byte   *dest;
+    int     count;
+    int     spot;
+
+    count = ds_x2 - ds_x1;
+    ds_x1 <<= 2;
+    dest = ylookup[ds_y] + columnofs[ds_x1];
+
+    do {
+        spot = ((yfrac>>(16-6))&(63*64)) + ((xfrac>>16)&63);
+        { byte v = ds_colormap[ds_source[spot]];
+          *dest++ = v; *dest++ = v; *dest++ = v; *dest++ = v; }
+        xfrac += ds_xstep;
+        yfrac += ds_ystep;
+    } while (count--);
+}
+
+/*
+ * R_DrawColumnMushColor — 8-bit color, 8-pixels-wide per logical column.
+ * Used in MUSH detail mode (detailshift=3) on color displays.
+ * dc_x is 0..39.  Physical pixels: dc_x*8..dc_x*8+7.
+ */
+void R_DrawColumnMushColor(void)
+{
+    int count = dc_yh - dc_yl;
+    if (count < 0) return;
+
+    {
+    int     x8    = dc_x << 3;
+    byte   *dest  = ylookup[dc_yl] + columnofs[x8];
+    byte   *dest2 = ylookup[dc_yl] + columnofs[x8+1];
+    byte   *dest3 = ylookup[dc_yl] + columnofs[x8+2];
+    byte   *dest4 = ylookup[dc_yl] + columnofs[x8+3];
+    byte   *dest5 = ylookup[dc_yl] + columnofs[x8+4];
+    byte   *dest6 = ylookup[dc_yl] + columnofs[x8+5];
+    byte   *dest7 = ylookup[dc_yl] + columnofs[x8+6];
+    byte   *dest8 = ylookup[dc_yl] + columnofs[x8+7];
+    fixed_t fracstep = dc_iscale;
+    fixed_t frac     = dc_texturemid + (dc_yl - centery) * fracstep;
+
+    do {
+        byte v = dc_colormap[dc_source[(frac>>FRACBITS)&127]];
+        *dest8 = *dest7 = *dest6 = *dest5 =
+        *dest4 = *dest3 = *dest2 = *dest  = v;
+        dest  += SCREENWIDTH; dest2 += SCREENWIDTH;
+        dest3 += SCREENWIDTH; dest4 += SCREENWIDTH;
+        dest5 += SCREENWIDTH; dest6 += SCREENWIDTH;
+        dest7 += SCREENWIDTH; dest8 += SCREENWIDTH;
+        frac  += fracstep;
+    } while (count--);
+    }
+}
+
+/*
+ * R_DrawSpanMushColor — 8-bit color, 8-pixels-wide per logical span column.
+ * count saved BEFORE octupling (same fix as R_DrawSpanLow/QuadColor).
+ */
+void R_DrawSpanMushColor(void)
+{
+    fixed_t xfrac = ds_xfrac;
+    fixed_t yfrac = ds_yfrac;
+    byte   *dest;
+    int     count;
+    int     spot;
+
+    count = ds_x2 - ds_x1;
+    ds_x1 <<= 3;
+    dest = ylookup[ds_y] + columnofs[ds_x1];
+
+    do {
+        spot = ((yfrac>>(16-6))&(63*64)) + ((xfrac>>16)&63);
+        { byte v = ds_colormap[ds_source[spot]];
+          *dest++ = v; *dest++ = v; *dest++ = v; *dest++ = v;
+          *dest++ = v; *dest++ = v; *dest++ = v; *dest++ = v; }
+        xfrac += ds_xstep;
+        yfrac += ds_ystep;
     } while (count--);
 }
